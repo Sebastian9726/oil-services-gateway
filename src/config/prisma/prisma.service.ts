@@ -1,0 +1,57 @@
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
+
+@Injectable()
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    super({
+      log: ['query', 'info', 'warn', 'error'],
+    });
+  }
+
+  async onModuleInit() {
+    await this.$connect();
+    console.log('✅ Base de datos conectada correctamente');
+  }
+
+  async onModuleDestroy() {
+    await this.$disconnect();
+    console.log('❌ Desconectado de la base de datos');
+  }
+
+  // Método para limpiar la base de datos (útil para testing)
+  async cleanDatabase() {
+    const models = Reflect.ownKeys(this).filter(key => key[0] !== '_');
+
+    return Promise.all(
+      models.map((modelKey) => {
+        const model = this[modelKey as keyof this];
+        if (typeof model === 'object' && model !== null && 'deleteMany' in model) {
+          return (model as any).deleteMany();
+        }
+      }),
+    );
+  }
+
+  // Método para obtener estadísticas de la base de datos
+  async getDatabaseStats() {
+    const [
+      usuariosCount,
+      productosCount,
+      ventasCount,
+      clientesCount,
+    ] = await Promise.all([
+      this.usuario.count(),
+      this.producto.count(),
+      this.venta.count(),
+      this.cliente.count(),
+    ]);
+
+    return {
+      usuarios: usuariosCount,
+      productos: productosCount,
+      ventas: ventasCount,
+      clientes: clientesCount,
+    };
+  }
+} 

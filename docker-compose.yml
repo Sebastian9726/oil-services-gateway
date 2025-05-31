@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # Application Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oil-services-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/oil_services_db
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - JWT_EXPIRES_IN=1d
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - oil-services-network
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: oil-services-postgres
+    ports:
+      - "5433:5432"  # Changed to avoid conflicts
+    environment:
+      POSTGRES_DB: oil_services_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - oil-services-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d oil_services_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: oil-services-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@estacion.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - oil-services-network
+    restart: unless-stopped
+    depends_on:
+      - postgres
+
+  # Migration service (one-time setup)
+  migration:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oil-services-migration
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/oil_services_db
+    networks:
+      - oil-services-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "
+        npx prisma migrate deploy &&
+        npx prisma db seed
+      "
+    restart: "no"
+
+networks:
+  oil-services-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  pgadmin_data: 
