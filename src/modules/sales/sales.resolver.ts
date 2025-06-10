@@ -13,14 +13,14 @@ export class SalesResolver {
 
   @Query(() => String, { name: 'sales' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente', 'empleado')
+  @Roles('admin', 'manager', 'employee')
   async findAllSales(): Promise<string> {
     return this.salesService.findAll();
   }
 
   @Query(() => String, { name: 'salesStats' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async getSalesStats(): Promise<string> {
     const stats = await this.salesService.getSalesStats();
     return JSON.stringify(stats);

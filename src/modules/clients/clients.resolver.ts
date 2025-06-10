@@ -16,21 +16,30 @@ export class ClientsResolver {
 
   @Mutation(() => Cliente)
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente', 'empleado')
+  @Roles('admin', 'manager', 'employee')
   async createClient(@Args('createClienteInput') createClienteInput: CreateClienteInput): Promise<Cliente> {
     return this.clientsService.create(createClienteInput);
   }
 
   @Query(() => [Cliente], { name: 'clients' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente', 'empleado')
-  async findAllClients(): Promise<Cliente[]> {
+  @Roles('admin', 'manager', 'employee')
+  async findAll(): Promise<Cliente[]> {
     return this.clientsService.findAll();
   }
 
   @Query(() => Cliente, { name: 'client' })
-  async findOneClient(@Args('id', { type: () => ID }) id: string): Promise<Cliente> {
+  async findOne(@Args('id', { type: () => ID }) id: string): Promise<Cliente> {
     const client = await this.clientsService.findById(id);
+    if (!client) {
+      throw new Error('Cliente no encontrado');
+    }
+    return client;
+  }
+
+  @Query(() => Cliente, { name: 'clientByDocument' })
+  async findByDocument(@Args('numeroDocumento') numeroDocumento: string): Promise<Cliente> {
+    const client = await this.clientsService.findByDocument(numeroDocumento);
     if (!client) {
       throw new Error('Cliente no encontrado');
     }
@@ -39,7 +48,7 @@ export class ClientsResolver {
 
   @Mutation(() => Cliente)
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async updateClient(
     @Args('id', { type: () => ID }) id: string,
     @Args('updateClienteInput') updateClienteInput: UpdateClienteInput,

@@ -51,6 +51,7 @@ model Usuario {
   rol           Rol       @relation(fields: [rolId], references: [id])
   turnos        Turno[]
   ventas        Venta[]
+  cierresTurno  CierreTurno[]
   
   @@map("usuarios")
   @@schema("usuarios")
@@ -72,11 +73,38 @@ model Turno {
   updatedAt       DateTime  @updatedAt
   
   // Relaciones
-  usuarioId       String
-  usuario         Usuario   @relation(fields: [usuarioId], references: [id])
+  usuarioId       String?
+  usuario         Usuario?  @relation(fields: [usuarioId], references: [id])
   ventas          Venta[]
+  cierres         CierreTurno[]
   
   @@map("turnos")
+  @@schema("turnos")
+}
+
+model CierreTurno {
+  id                    String    @id @default(cuid())
+  fechaCierre           DateTime  @default(now())
+  totalVentasLitros     Decimal   @db.Decimal(12, 2)
+  totalVentasGalones    Decimal   @db.Decimal(12, 2)
+  valorTotalGeneral     Decimal   @db.Decimal(12, 2)
+  productosActualizados Int       @default(0)
+  tanquesActualizados   Int       @default(0)
+  estado                String    // "exitoso", "con_errores", "fallido"
+  errores               String[]  // Array de errores si los hay
+  advertencias          String[]  // Array de advertencias
+  resumenSurtidores     Json      // JSON con el detalle completo del cierre
+  observacionesGenerales String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  // Relaciones
+  turnoId               String
+  turno                 Turno     @relation(fields: [turnoId], references: [id])
+  usuarioId             String    // Usuario que realizó el cierre
+  usuario               Usuario   @relation(fields: [usuarioId], references: [id])
+  
+  @@map("cierres_turno")
   @@schema("turnos")
 }
 
@@ -131,19 +159,20 @@ model Producto {
   descripcion       String?
   unidadMedida      String              // "litros", "galones", "unidades"
   precio            Decimal             @db.Decimal(10, 2)
-  stockMinimo       Int                 @default(0)
-  stockActual       Int                 @default(0)
-  esCombustible     Boolean             @default(false)
-  activo            Boolean             @default(true)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  stockMinimo        Int                @default(0)
+  stockActual        Int                @default(0)
+  esCombustible      Boolean            @default(false)
+  activo             Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
   
   // Relaciones
-  categoriaId       String
-  categoria         Categoria           @relation(fields: [categoriaId], references: [id])
-  entradasInventario EntradaInventario[]
-  detallesVentas    DetalleVenta[]
-  tanques           Tanque[]
+  categoriaId        String
+  categoria          Categoria            @relation(fields: [categoriaId], references: [id])
+  entradasInventario  EntradaInventario[]
+  detallesVentas      DetalleVenta[]
+  tanques             Tanque[]
+  mangueras           MangueraSurtidor[]
   
   @@map("productos")
   @@schema("inventario")
@@ -154,7 +183,7 @@ model Tanque {
   numero            String              @unique
   capacidadTotal    Decimal             @db.Decimal(10, 2)
   nivelActual       Decimal             @db.Decimal(10, 2) @default(0)
-  nivelMinimo       Decimal             @db.Decimal(10, 2) @default(0)
+  nivelMinimo        Decimal            @db.Decimal(10, 2) @default(0)
   activo            Boolean             @default(true)
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
@@ -165,6 +194,46 @@ model Tanque {
   entradasInventario EntradaInventario[]
   
   @@map("tanques")
+  @@schema("inventario")
+}
+
+model Surtidor {
+  id              String          @id @default(cuid())
+  numero          String          @unique
+  nombre          String
+  descripcion     String?
+  ubicacion       String?         // Ubicación física del surtidor
+  cantidadMangueras Int             @default(1)
+  activo          Boolean           @default(true)
+  fechaInstalacion DateTime?
+  fechaMantenimiento DateTime?
+  observaciones   String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relaciones
+  mangueras       MangueraSurtidor[]
+  
+  @@map("surtidores")
+  @@schema("inventario")
+}
+
+model MangueraSurtidor {
+  id            String    @id @default(cuid())
+  numero        String    // Número de la manguera (ej: "M1", "M2")
+  color         String?   // Color identificativo de la manguera
+  activo        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relaciones
+  surtidorId    String
+  surtidor      Surtidor  @relation(fields: [surtidorId], references: [id], onDelete: Cascade)
+  productoId    String
+  producto      Producto  @relation(fields: [productoId], references: [id])
+  
+  @@unique([surtidorId, numero])
+  @@map("mangueras_surtidor")
   @@schema("inventario")
 }
 

@@ -13,7 +13,7 @@ export class ReportsResolver {
 
   @Query(() => String, { name: 'dashboard' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async getDashboard(): Promise<string> {
     const dashboard = await this.reportsService.getDashboard();
     return JSON.stringify(dashboard);
@@ -21,7 +21,7 @@ export class ReportsResolver {
 
   @Query(() => String, { name: 'dailySalesReport' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async getDailySales(): Promise<string> {
     const report = await this.reportsService.getDailySales();
     return JSON.stringify(report);

@@ -17,13 +17,13 @@ export class RolesResolver {
   @Mutation(() => Rol)
   @UseGuards(RolesGuard)
   @Roles('admin')
-  async createRol(@Args('createRolInput') createRolInput: CreateRolInput): Promise<Rol> {
-    return this.rolesService.create(createRolInput);
+  async createRole(@Args('createRoleInput') createRoleInput: CreateRolInput): Promise<Rol> {
+    return this.rolesService.create(createRoleInput);
   }
 
   @Query(() => [Rol], { name: 'roles' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async findAll(): Promise<Rol[]> {
     return this.rolesService.findAll();
   }
@@ -33,31 +33,31 @@ export class RolesResolver {
     return this.rolesService.getActiveRoles();
   }
 
-  @Query(() => Rol, { name: 'rol' })
+  @Query(() => Rol, { name: 'role' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async findOne(@Args('id', { type: () => ID }) id: string): Promise<Rol> {
-    const rol = await this.rolesService.findById(id);
-    if (!rol) {
+    const role = await this.rolesService.findById(id);
+    if (!role) {
       throw new Error('Rol no encontrado');
     }
-    return rol;
+    return role;
   }
 
   @Mutation(() => Rol)
   @UseGuards(RolesGuard)
-  @Roles('admin')
-  async updateRol(
+  @Roles('admin', 'manager')
+  async updateRole(
     @Args('id', { type: () => ID }) id: string,
-    @Args('updateRolInput') updateRolInput: UpdateRolInput,
+    @Args('updateRoleInput') updateRoleInput: UpdateRolInput,
   ): Promise<Rol> {
-    return this.rolesService.update(id, updateRolInput);
+    return this.rolesService.update(id, updateRoleInput);
   }
 
   @Mutation(() => Rol)
   @UseGuards(RolesGuard)
-  @Roles('admin')
-  async removeRol(@Args('id', { type: () => ID }) id: string): Promise<Rol> {
+  @Roles('admin', 'manager')
+  async removeRole(@Args('id', { type: () => ID }) id: string): Promise<Rol> {
     return this.rolesService.remove(id);
   }
 

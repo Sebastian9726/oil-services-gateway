@@ -6,86 +6,112 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Iniciando seed de la base de datos...');
 
-  // Crear roles básicos
-  console.log('📝 Creando roles...');
+  // Crear roles
+  console.log('Creando roles...');
   
   const adminRole = await prisma.rol.upsert({
     where: { nombre: 'admin' },
     update: {},
     create: {
       nombre: 'admin',
-      descripcion: 'Administrador del sistema con acceso completo',
-      permisos: [
-        'users:create',
-        'users:read',
-        'users:update',
-        'users:delete',
-        'roles:create',
-        'roles:read',
-        'roles:update',
-        'roles:delete',
-        'inventory:create',
-        'inventory:read',
-        'inventory:update',
-        'inventory:delete',
-        'sales:create',
-        'sales:read',
-        'sales:update',
-        'sales:delete',
-        'reports:read',
-        'clients:create',
-        'clients:read',
-        'clients:update',
-        'clients:delete',
-        'shifts:create',
-        'shifts:read',
-        'shifts:update',
-        'shifts:delete',
-      ],
+      descripcion: 'Administrador con acceso completo al sistema',
+      activo: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     },
   });
 
-  const gerenteRole = await prisma.rol.upsert({
-    where: { nombre: 'gerente' },
-    update: {},
-    create: {
-      nombre: 'gerente',
-      descripcion: 'Gerente con acceso a operaciones y reportes',
-      permisos: [
-        'users:read',
-        'inventory:create',
-        'inventory:read',
-        'inventory:update',
-        'sales:create',
-        'sales:read',
-        'sales:update',
-        'reports:read',
-        'clients:create',
-        'clients:read',
-        'clients:update',
-        'shifts:create',
-        'shifts:read',
-        'shifts:update',
-      ],
-    },
+  // Manejar migración de 'gerente' a 'manager'
+  const existingGerenteRole = await prisma.rol.findUnique({
+    where: { nombre: 'gerente' }
   });
 
-  const empleadoRole = await prisma.rol.upsert({
-    where: { nombre: 'empleado' },
-    update: {},
-    create: {
-      nombre: 'empleado',
-      descripcion: 'Empleado con acceso básico a ventas',
-      permisos: [
-        'inventory:read',
-        'sales:create',
-        'sales:read',
-        'clients:create',
-        'clients:read',
-        'shifts:read',
-      ],
-    },
+  const existingManagerRole = await prisma.rol.findUnique({
+    where: { nombre: 'manager' }
   });
+
+  let managerRole;
+
+  if (existingGerenteRole && !existingManagerRole) {
+    // Si existe 'gerente' pero no 'manager', actualizar 'gerente' a 'manager'
+    managerRole = await prisma.rol.update({
+      where: { nombre: 'gerente' },
+      data: { 
+        nombre: 'manager', 
+        descripcion: 'Manager with access to operations and reports' 
+      }
+    });
+    console.log('Rol gerente migrado a manager:', managerRole);
+  } else if (existingGerenteRole && existingManagerRole) {
+    // Si ambos existen, eliminar 'gerente' y mantener 'manager'
+    await prisma.rol.delete({
+      where: { nombre: 'gerente' }
+    });
+    managerRole = existingManagerRole;
+    console.log('Rol gerente eliminado, manteniendo manager');
+  } else if (!existingManagerRole) {
+    // Si no existe 'manager', crearlo
+    managerRole = await prisma.rol.create({
+      data: {
+        nombre: 'manager',
+        descripcion: 'Manager with access to operations and reports',
+        activo: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+    });
+    console.log('Rol Manager creado:', managerRole);
+  } else {
+    // Si solo existe 'manager', usarlo
+    managerRole = existingManagerRole;
+    console.log('Rol Manager ya existe');
+  }
+
+  // Manejar migración de 'empleado' a 'employee'
+  const existingEmpleadoRole = await prisma.rol.findUnique({
+    where: { nombre: 'empleado' }
+  });
+
+  const existingEmployeeRole = await prisma.rol.findUnique({
+    where: { nombre: 'employee' }
+  });
+
+  let employeeRole;
+
+  if (existingEmpleadoRole && !existingEmployeeRole) {
+    // Si existe 'empleado' pero no 'employee', actualizar 'empleado' a 'employee'
+    employeeRole = await prisma.rol.update({
+      where: { nombre: 'empleado' },
+      data: { 
+        nombre: 'employee', 
+        descripcion: 'Employee with basic access to sales' 
+      }
+    });
+    console.log('Rol empleado migrado a employee:', employeeRole);
+  } else if (existingEmpleadoRole && existingEmployeeRole) {
+    // Si ambos existen, eliminar 'empleado' y mantener 'employee'
+    await prisma.rol.delete({
+      where: { nombre: 'empleado' }
+    });
+    employeeRole = existingEmployeeRole;
+    console.log('Rol empleado eliminado, manteniendo employee');
+  } else if (!existingEmployeeRole) {
+    // Si no existe 'employee', crearlo
+    employeeRole = await prisma.rol.create({
+      data: {
+        nombre: 'employee',
+        descripcion: 'Employee with basic access to sales',
+        activo: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+    });
+    console.log('Rol Employee creado:', employeeRole);
+  } else {
+    // Si solo existe 'employee', usarlo
+    employeeRole = existingEmployeeRole;
+    console.log('Rol Employee ya existe');
+  }
 
   console.log('✅ Roles creados');
 
@@ -110,6 +136,83 @@ async function main() {
   });
 
   console.log('✅ Usuario administrador creado');
+
+  // Crear usuario gerente
+  console.log('👤 Creando usuario gerente...');
+  
+  const managerHashedPassword = await bcrypt.hash('manager123', 12);
+  
+  const managerUser = await prisma.usuario.upsert({
+    where: { email: 'gerente@estacion.com' },
+    update: {},
+    create: {
+      email: 'gerente@estacion.com',
+      username: 'gerente',
+      password: managerHashedPassword,
+      nombre: 'Carlos',
+      apellido: 'Rodríguez',
+      telefono: '987654321',
+      emailVerified: true,
+      rolId: managerRole.id,
+    },
+  });
+
+  console.log('✅ Usuario gerente creado');
+
+  // Crear empleados
+  console.log('👤 Creando empleados...');
+  
+  const employeeHashedPassword = await bcrypt.hash('empleado123', 12);
+  
+  const empleados = [
+    {
+      email: 'maria.garcia@estacion.com',
+      username: 'maria.garcia',
+      nombre: 'María',
+      apellido: 'García',
+      telefono: '956789123'
+    },
+    {
+      email: 'pedro.lopez@estacion.com',
+      username: 'pedro.lopez',
+      nombre: 'Pedro',
+      apellido: 'López',
+      telefono: '934567812'
+    },
+    {
+      email: 'ana.martinez@estacion.com',
+      username: 'ana.martinez',
+      nombre: 'Ana',
+      apellido: 'Martínez',
+      telefono: '912345678'
+    },
+    {
+      email: 'luis.fernandez@estacion.com',
+      username: 'luis.fernandez',
+      nombre: 'Luis',
+      apellido: 'Fernández',
+      telefono: '923456789'
+    }
+  ];
+
+  for (const empleado of empleados) {
+    await prisma.usuario.upsert({
+      where: { email: empleado.email },
+      update: {},
+      create: {
+        email: empleado.email,
+        username: empleado.username,
+        password: employeeHashedPassword,
+        nombre: empleado.nombre,
+        apellido: empleado.apellido,
+        telefono: empleado.telefono,
+        emailVerified: true,
+        rolId: employeeRole.id,
+      },
+    });
+  }
+
+  console.log('✅ Empleados creados');
 
   // Crear categorías básicas
   console.log('📦 Creando categorías de productos...');
@@ -271,6 +374,115 @@ async function main() {
   });
 
   console.log('✅ Cliente creado');
+
+  // Crear surtidores
+  console.log('🚗 Creando surtidores...');
+
+  const surtidores = [
+    {
+      numero: 'PUMP-01',
+      nombre: 'Surtidor Principal 1',
+      descripcion: 'Surtidor principal con 2 mangueras',
+      ubicacion: 'Zona A - Entrada',
+      cantidadMangueras: 2,
+      activo: true,
+      fechaInstalacion: new Date('2024-01-01'),
+      observaciones: 'Surtidor en óptimas condiciones',
+      mangueras: [
+        {
+          numero: 'M1',
+          color: 'Verde',
+          productoId: gasolina95.id, // Gasolina 95
+          activo: true,
+        },
+        {
+          numero: 'M2',
+          color: 'Negro',
+          productoId: diesel.id, // Diesel
+          activo: true,
+        },
+      ],
+    },
+    {
+      numero: 'PUMP-02',
+      nombre: 'Surtidor Principal 2',
+      descripcion: 'Surtidor principal con 2 mangueras',
+      ubicacion: 'Zona A - Centro',
+      cantidadMangueras: 2,
+      activo: true,
+      fechaInstalacion: new Date('2024-01-01'),
+      observaciones: 'Surtidor en óptimas condiciones',
+      mangueras: [
+        {
+          numero: 'M1',
+          color: 'Verde',
+          productoId: gasolina95.id, // Gasolina 95
+          activo: true,
+        },
+        {
+          numero: 'M2',
+          color: 'Negro',
+          productoId: diesel.id, // Diesel
+          activo: true,
+        },
+      ],
+    },
+    {
+      numero: 'PUMP-03',
+      nombre: 'Surtidor Económico',
+      descripcion: 'Surtidor económico con 1 manguera',
+      ubicacion: 'Zona B - Lateral',
+      cantidadMangueras: 1,
+      activo: true,
+      fechaInstalacion: new Date('2024-01-15'),
+      observaciones: 'Surtidor para tráfico liviano',
+      mangueras: [
+        {
+          numero: 'M1',
+          color: 'Verde',
+          productoId: gasolina95.id, // Gasolina 95
+          activo: true,
+        },
+      ],
+    },
+  ];
+
+  for (const surtidorData of surtidores) {
+    const { mangueras, ...surtidorInfo } = surtidorData;
+    
+    const surtidorExistente = await prisma.surtidor.findUnique({
+      where: { numero: surtidorInfo.numero }
+    });
+
+    if (surtidorExistente) {
+      console.log(`⚠️  Surtidor ${surtidorInfo.numero} ya existe, saltando...`);
+      continue;
+    }
+
+    const surtidor = await prisma.surtidor.create({
+      data: {
+        ...surtidorInfo,
+        mangueras: {
+          create: mangueras,
+        },
+      },
+      include: {
+        mangueras: {
+          include: {
+            producto: true,
+          },
+        },
+      },
+    });
+
+    console.log(`✅ Surtidor creado: ${surtidor.numero} - ${surtidor.nombre}`);
+    console.log(`   Mangueras: ${surtidor.mangueras.length}`);
+    surtidor.mangueras.forEach(manguera => {
+      console.log(`     - ${manguera.numero} (${manguera.color}): ${manguera.producto.nombre}`);
+    });
+  }
+
+  console.log('✅ Surtidores creados');
 
   console.log('🎉 Seed completado exitosamente!');
   console.log('📧 Usuario admin: admin@estacion.com');

@@ -3,9 +3,11 @@ import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 import { ProductsService } from './products.service';
-import { Producto } from './entities/producto.entity';
+import { SurtidoresService } from './surtidores.service';
+import { Producto, ProductListResponse } from './entities/producto.entity';
 import { 
   ProductWithConversionsResponse, 
   StockConversion, 
@@ -14,28 +16,52 @@ import {
   TotalesInventario
 } from './entities/conversion-response.entity';
 import {
+  ActualizacionInventarioResponse
+} from './entities/dispenser-readings.entity';
+import {
+  CierreTurno,
+  CierreTurnoListResponse
+} from './entities/shift-closure.entity';
+import {
   CierreTurnoInput,
-  ActualizacionInventarioResponse,
   LecturaMangueraInput
-} from './entities/surtidor-readings.entity';
+} from './dto/shift-closure.input';
+import { SimpleStockUpdateInput } from './dto/simple-stock-update.input';
 import { CreateProductInput } from './dto/create-product.input';
 import { UpdateProductInput } from './dto/update-product.input';
 
 @Resolver(() => Producto)
 @UseGuards(JwtAuthGuard)
 export class ProductsResolver {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly surtidoresService: SurtidoresService,
+  ) {}
 
   @Mutation(() => Producto)
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async createProduct(@Args('createProductInput') createProductInput: CreateProductInput): Promise<Producto> {
     return this.productsService.create(createProductInput);
   }
 
-  @Query(() => [Producto], { name: 'products' })
-  async findAllProducts(): Promise<Producto[]> {
-    return this.productsService.findAll();
+  @Query(() => ProductListResponse, { name: 'products' })
+  async findAllProducts(
+    @Args('page', { type: () => Int, defaultValue: 1 }) page: number = 1,
+    @Args('limit', { type: () => Int, defaultValue: 10 }) limit: number = 10,
+    @Args('searchTerm', { nullable: true }) searchTerm?: string,
+    @Args('categoriaId', { type: () => ID, nullable: true }) categoriaId?: string,
+    @Args('activo', { nullable: true }) activo?: boolean,
+    @Args('esCombustible', { nullable: true }) esCombustible?: boolean,
+  ): Promise<ProductListResponse> {
+    return this.productsService.findAll({
+      page,
+      limit,
+      searchTerm,
+      categoriaId,
+      activo,
+      esCombustible,
+    });
   }
 
   @Query(() => Producto, { name: 'product' })
@@ -68,7 +94,7 @@ export class ProductsResolver {
 
   @Query(() => [Producto], { name: 'lowStockProducts' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente', 'empleado')
+  @Roles('admin', 'manager', 'employee')
   async findLowStockProducts(): Promise<Producto[]> {
     return this.productsService.findLowStock();
   }
@@ -139,7 +165,7 @@ export class ProductsResolver {
 
   @Mutation(() => Producto)
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async updateProduct(
     @Args('id', { type: () => ID }) id: string,
     @Args('updateProductInput') updateProductInput: UpdateProductInput,
@@ -149,7 +175,7 @@ export class ProductsResolver {
 
   @Mutation(() => Producto)
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async updateProductStock(
     @Args('id', { type: () => ID }) id: string,
     @Args('cantidad', { type: () => Int }) cantidad: number,
@@ -167,14 +193,14 @@ export class ProductsResolver {
 
   @Mutation(() => Producto)
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async toggleProductStatus(@Args('id', { type: () => ID }) id: string): Promise<Producto> {
     return this.productsService.toggleProductStatus(id);
   }
 
   @Query(() => String, { name: 'productStats' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async getProductStats(): Promise<string> {
     const stats = await this.productsService.getProductStats();
     return JSON.stringify(stats);
@@ -182,7 +208,7 @@ export class ProductsResolver {
 
   @Query(() => InventorySummaryResponse, { name: 'inventorySummaryWithConversions' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente', 'empleado')
+  @Roles('admin', 'manager', 'employee')
   async getInventorySummaryWithConversions(): Promise<InventorySummaryResponse> {
     const products = await this.productsService.findFuel();
     
@@ -228,7 +254,7 @@ export class ProductsResolver {
 
   @Mutation(() => Producto, { name: 'updateStockWithConversion' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente', 'empleado')
+  @Roles('admin', 'manager', 'employee')
   async updateStockWithConversion(
     @Args('codigoProducto') codigoProducto: string,
     @Args('cantidad', { type: () => Float }) cantidad: number,
@@ -256,11 +282,12 @@ export class ProductsResolver {
     return this.productsService.updateStock(product.id, Math.round(cantidadEnLitros * 100) / 100, tipo);
   }
 
-  @Mutation(() => ActualizacionInventarioResponse, { name: 'procesarCierreTurno' })
+  @Mutation(() => ActualizacionInventarioResponse, { name: 'processShiftClosure' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente', 'empleado')
-  async procesarCierreTurno(
-    @Args('cierreTurnoInput') cierreTurnoInput: CierreTurnoInput
+  @Roles('admin', 'manager', 'employee')
+  async processShiftClosure(
+    @Args('cierreTurnoInput') cierreTurnoInput: CierreTurnoInput,
+    @CurrentUser() user: any
   ): Promise<ActualizacionInventarioResponse> {
     const GALONES_TO_LITROS = 3.78541;
     const LITROS_TO_GALONES = 0.264172;
@@ -269,11 +296,48 @@ export class ProductsResolver {
     const advertencias: string[] = [];
     const resumenSurtidores = [];
     let productosActualizados = 0;
+    let tanquesActualizados = 0;
     let totalGeneralLitros = 0;
     let totalGeneralGalones = 0;
     let valorTotalGeneral = 0;
 
     try {
+      // Validar que todos los surtidores existen antes de procesar
+      for (const surtidor of cierreTurnoInput.lecturasSurtidores) {
+        const surtidorExists = await this.surtidoresService.validateSurtidorExists(surtidor.numeroSurtidor);
+        if (!surtidorExists) {
+          errores.push(`Surtidor no registrado o inactivo: ${surtidor.numeroSurtidor}`);
+          continue;
+        }
+
+        // Validar cada manguera del surtidor
+        for (const manguera of surtidor.mangueras) {
+          const mangueraExists = await this.surtidoresService.validateMangueraExists(
+            surtidor.numeroSurtidor,
+            manguera.numeroManguera,
+            manguera.codigoProducto
+          );
+          if (!mangueraExists) {
+            errores.push(`Manguera ${manguera.numeroManguera} no válida para surtidor ${surtidor.numeroSurtidor} o producto ${manguera.codigoProducto}`);
+          }
+        }
+      }
+
+      // Si hay errores de validación de surtidores, retornar inmediatamente
+      if (errores.length > 0) {
+        return {
+          resumenSurtidores: [],
+          totalGeneralLitros: 0,
+          totalGeneralGalones: 0,
+          valorTotalGeneral: 0,
+          fechaProceso: new Date(),
+          turnoId: cierreTurnoInput.turnoId,
+          productosActualizados: 0,
+          estado: 'fallido',
+          errores: errores
+        };
+      }
+
       // Procesar cada surtidor
       for (const surtidor of cierreTurnoInput.lecturasSurtidores) {
         const ventasCalculadas = [];
@@ -325,9 +389,21 @@ export class ProductsResolver {
             const precioGalon = Math.round(precioLitro / LITROS_TO_GALONES * 100) / 100;
             const valorVenta = cantidadLitros * precioLitro;
 
-            // Actualizar stock (restar del inventario)
+            // Actualizar stock del producto (restar del inventario)
             await this.productsService.updateStock(product.id, cantidadLitros, 'salida');
             productosActualizados++;
+
+            // Si es combustible, también actualizar el tanque físico
+            if (product.esCombustible) {
+              try {
+                const tanqueActualizado = await this.productsService.updateTankLevel(product.id, cantidadLitros, 'salida');
+                if (tanqueActualizado) {
+                  tanquesActualizados++;
+                }
+              } catch (tankError) {
+                advertencias.push(`No se pudo actualizar tanque para producto ${manguera.codigoProducto}: ${tankError.message}`);
+              }
+            }
 
             // Agregar a resumen
             ventasCalculadas.push({
@@ -366,6 +442,26 @@ export class ProductsResolver {
 
       const estado = errores.length > 0 ? 'con_errores' : 'exitoso';
 
+      // Guardar trazabilidad en la base de datos
+      try {
+        await this.productsService.saveShiftClosure({
+          turnoId: cierreTurnoInput.turnoId,
+          usuarioId: user.id,
+          totalVentasLitros: Math.round(totalGeneralLitros * 100) / 100,
+          totalVentasGalones: Math.round(totalGeneralGalones * 100) / 100,
+          valorTotalGeneral: Math.round(valorTotalGeneral * 100) / 100,
+          productosActualizados,
+          tanquesActualizados,
+          estado,
+          errores: errores.length > 0 ? errores : undefined,
+          advertencias: advertencias.length > 0 ? [...advertencias, `Tanques actualizados: ${tanquesActualizados}`] : [`Tanques actualizados: ${tanquesActualizados}`],
+          resumenSurtidores,
+          observacionesGenerales: cierreTurnoInput.observacionesGenerales
+        });
+      } catch (saveError) {
+        advertencias.push(`Advertencia: No se pudo guardar la trazabilidad del cierre: ${saveError.message}`);
+      }
+
       return {
         resumenSurtidores,
         totalGeneralLitros: Math.round(totalGeneralLitros * 100) / 100,
@@ -376,7 +472,7 @@ export class ProductsResolver {
         productosActualizados,
         estado,
         errores: errores.length > 0 ? errores : undefined,
-        advertencias: advertencias.length > 0 ? advertencias : undefined
+        advertencias: advertencias.length > 0 ? [...advertencias, `Tanques actualizados: ${tanquesActualizados}`] : [`Tanques actualizados: ${tanquesActualizados}`]
       };
 
     } catch (error) {
@@ -392,5 +488,96 @@ export class ProductsResolver {
         errores: [`Error general: ${error.message}`]
       };
     }
+  }
+
+  @Query(() => CierreTurnoListResponse, { name: 'getShiftClosures' })
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager', 'employee')
+  async getShiftClosures(
+    @Args('turnoId', { type: () => ID, nullable: true }) turnoId?: string,
+    @Args('fechaDesde', { nullable: true }) fechaDesde?: Date,
+    @Args('fechaHasta', { nullable: true }) fechaHasta?: Date,
+    @Args('estado', { nullable: true }) estado?: string,
+    @Args('usuarioId', { type: () => ID, nullable: true }) usuarioId?: string,
+    @Args('page', { type: () => Int, defaultValue: 1 }) page: number = 1,
+    @Args('limit', { type: () => Int, defaultValue: 10 }) limit: number = 10
+  ): Promise<CierreTurnoListResponse> {
+    return this.productsService.getShiftClosures({
+      turnoId,
+      fechaDesde,
+      fechaHasta,
+      estado,
+      usuarioId,
+      page,
+      limit
+    });
+  }
+
+  @Query(() => CierreTurno, { name: 'getShiftClosure' })
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager', 'employee')
+  async getShiftClosure(@Args('id', { type: () => ID }) id: string): Promise<CierreTurno> {
+    return this.productsService.getShiftClosureById(id);
+  }
+
+  @Query(() => [CierreTurno], { name: 'getShiftClosuresByDate' })
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager', 'employee')
+  async getShiftClosuresByDate(
+    @Args('fecha') fecha: Date
+  ): Promise<CierreTurno[]> {
+    const fechaInicio = new Date(fecha);
+    fechaInicio.setHours(0, 0, 0, 0);
+    
+    const fechaFin = new Date(fecha);
+    fechaFin.setHours(23, 59, 59, 999);
+
+    const result = await this.productsService.getShiftClosures({
+      fechaDesde: fechaInicio,
+      fechaHasta: fechaFin,
+      limit: 100 // Para obtener todos los cierres del día
+    });
+
+    return result.cierres;
+  }
+
+  @Mutation(() => Producto, { name: 'updateStockSimple' })
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager', 'employee')
+  async updateStockSimple(
+    @Args('input') input: SimpleStockUpdateInput
+  ): Promise<Producto> {
+    const GALONES_TO_LITROS = 3.78541; // 1 galón = 3.78541 litros
+    
+    // Buscar producto
+    const product = await this.productsService.findByCode(input.codigoProducto);
+    if (!product) {
+      throw new Error(`Producto no encontrado: ${input.codigoProducto}`);
+    }
+
+    // Convertir cantidad a litros si viene en galones
+    let cantidadEnLitros = input.cantidad;
+    if (input.unidadMedida.toLowerCase() === 'galones') {
+      cantidadEnLitros = input.cantidad * GALONES_TO_LITROS;
+    } else if (input.unidadMedida.toLowerCase() !== 'litros') {
+      throw new Error(`Unidad no soportada: ${input.unidadMedida}. Use 'litros' o 'galones'`);
+    }
+
+    // Actualizar stock
+    const updatedProduct = await this.productsService.updateStock(
+      product.id, 
+      Math.round(cantidadEnLitros * 100) / 100, 
+      input.tipo as 'entrada' | 'salida'
+    );
+
+    return updatedProduct;
+  }
+
+  @Query(() => String, { name: 'tankStatus' })
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager', 'employee')
+  async getTankStatus(): Promise<string> {
+    const tanks = await this.productsService.getTankStatus();
+    return JSON.stringify(tanks);
   }
 } 

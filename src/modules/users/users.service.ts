@@ -2,7 +2,9 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../../config/prisma/prisma.service';
 import { CreateUserInput } from './dto/create-user.input';
 import { UpdateUserInput } from './dto/update-user.input';
+import { FilterUsersInput } from './dto/filter-users.input';
 import { User } from './entities/user.entity';
+import { UserListResponse } from './entities/user-list-response.entity';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -64,6 +66,76 @@ export class UsersService {
     });
 
     return users as User[];
+  }
+
+  async findAllWithFilters(
+    filters?: FilterUsersInput,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<UserListResponse> {
+    // Si limit es -1, obtener todos los resultados sin paginación
+    const usesPagination = limit !== -1;
+    const skip = usesPagination ? (page - 1) * limit : 0;
+    
+    // Construir las condiciones de filtrado
+    const where: any = {};
+
+    if (filters?.activo !== undefined) {
+      where.activo = filters.activo;
+    }
+
+    if (filters?.emailVerified !== undefined) {
+      where.emailVerified = filters.emailVerified;
+    }
+
+    if (filters?.roleName) {
+      where.rol = {
+        nombre: filters.roleName,
+      };
+    }
+
+    if (filters?.search) {
+      where.OR = [
+        { nombre: { contains: filters.search, mode: 'insensitive' } },
+        { apellido: { contains: filters.search, mode: 'insensitive' } },
+        { email: { contains: filters.search, mode: 'insensitive' } },
+        { username: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Contar total de registros
+    const total = await this.prisma.usuario.count({ where });
+
+    // Configurar la query
+    const queryOptions: any = {
+      where,
+      include: {
+        rol: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    };
+
+    // Solo agregar skip y take si se usa paginación
+    if (usesPagination) {
+      queryOptions.skip = skip;
+      queryOptions.take = limit;
+    }
+
+    // Obtener usuarios con filtros
+    const users = await this.prisma.usuario.findMany(queryOptions);
+
+    const totalPages = usesPagination ? Math.ceil(total / limit) : 1;
+    const actualLimit = usesPagination ? limit : total;
+
+    return {
+      users: users as User[],
+      total,
+      page: usesPagination ? page : 1,
+      limit: actualLimit,
+      totalPages,
+    };
   }
 
   async findById(id: string): Promise<User | null> {
@@ -199,5 +271,24 @@ export class UsersService {
     });
 
     return updatedUser as User;
+  }
+
+  async findUsersByRole(roleName: string): Promise<User[]> {
+    const users = await this.prisma.usuario.findMany({
+      where: {
+        rol: {
+          nombre: roleName,
+        },
+        activo: true, // Solo usuarios activos por defecto
+      },
+      include: {
+        rol: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return users as User[];
   }
 } 

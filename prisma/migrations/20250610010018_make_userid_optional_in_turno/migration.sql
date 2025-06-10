@@ -59,9 +59,31 @@ CREATE TABLE "turnos"."turnos" (
     "activo" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "usuarioId" TEXT NOT NULL,
+    "usuarioId" TEXT,
 
     CONSTRAINT "turnos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "turnos"."cierres_turno" (
+    "id" TEXT NOT NULL,
+    "fechaCierre" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "totalVentasLitros" DECIMAL(12,2) NOT NULL,
+    "totalVentasGalones" DECIMAL(12,2) NOT NULL,
+    "valorTotalGeneral" DECIMAL(12,2) NOT NULL,
+    "productosActualizados" INTEGER NOT NULL DEFAULT 0,
+    "tanquesActualizados" INTEGER NOT NULL DEFAULT 0,
+    "estado" TEXT NOT NULL,
+    "errores" TEXT[],
+    "advertencias" TEXT[],
+    "resumenSurtidores" JSONB NOT NULL,
+    "observacionesGenerales" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "turnoId" TEXT NOT NULL,
+    "usuarioId" TEXT NOT NULL,
+
+    CONSTRAINT "cierres_turno_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -126,6 +148,38 @@ CREATE TABLE "inventario"."tanques" (
     "productoId" TEXT NOT NULL,
 
     CONSTRAINT "tanques_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "inventario"."surtidores" (
+    "id" TEXT NOT NULL,
+    "numero" TEXT NOT NULL,
+    "nombre" TEXT NOT NULL,
+    "descripcion" TEXT,
+    "ubicacion" TEXT,
+    "cantidadMangueras" INTEGER NOT NULL DEFAULT 1,
+    "activo" BOOLEAN NOT NULL DEFAULT true,
+    "fechaInstalacion" TIMESTAMP(3),
+    "fechaMantenimiento" TIMESTAMP(3),
+    "observaciones" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "surtidores_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "inventario"."mangueras_surtidor" (
+    "id" TEXT NOT NULL,
+    "numero" TEXT NOT NULL,
+    "color" TEXT,
+    "activo" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "surtidorId" TEXT NOT NULL,
+    "productoId" TEXT NOT NULL,
+
+    CONSTRAINT "mangueras_surtidor_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -236,6 +290,12 @@ CREATE UNIQUE INDEX "productos_codigo_key" ON "inventario"."productos"("codigo")
 CREATE UNIQUE INDEX "tanques_numero_key" ON "inventario"."tanques"("numero");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "surtidores_numero_key" ON "inventario"."surtidores"("numero");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "mangueras_surtidor_surtidorId_numero_key" ON "inventario"."mangueras_surtidor"("surtidorId", "numero");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "ventas_numeroVenta_key" ON "ventas"."ventas"("numeroVenta");
 
 -- CreateIndex
@@ -248,13 +308,25 @@ CREATE UNIQUE INDEX "inventario_actual_productoId_key" ON "reportes"."inventario
 ALTER TABLE "usuarios"."usuarios" ADD CONSTRAINT "usuarios_rolId_fkey" FOREIGN KEY ("rolId") REFERENCES "usuarios"."roles"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "turnos"."turnos" ADD CONSTRAINT "turnos_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "usuarios"."usuarios"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "turnos"."turnos" ADD CONSTRAINT "turnos_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "usuarios"."usuarios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "turnos"."cierres_turno" ADD CONSTRAINT "cierres_turno_turnoId_fkey" FOREIGN KEY ("turnoId") REFERENCES "turnos"."turnos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "turnos"."cierres_turno" ADD CONSTRAINT "cierres_turno_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "usuarios"."usuarios"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "inventario"."productos" ADD CONSTRAINT "productos_categoriaId_fkey" FOREIGN KEY ("categoriaId") REFERENCES "inventario"."categorias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "inventario"."tanques" ADD CONSTRAINT "tanques_productoId_fkey" FOREIGN KEY ("productoId") REFERENCES "inventario"."productos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "inventario"."mangueras_surtidor" ADD CONSTRAINT "mangueras_surtidor_surtidorId_fkey" FOREIGN KEY ("surtidorId") REFERENCES "inventario"."surtidores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "inventario"."mangueras_surtidor" ADD CONSTRAINT "mangueras_surtidor_productoId_fkey" FOREIGN KEY ("productoId") REFERENCES "inventario"."productos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "inventario"."entradas_inventario" ADD CONSTRAINT "entradas_inventario_productoId_fkey" FOREIGN KEY ("productoId") REFERENCES "inventario"."productos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

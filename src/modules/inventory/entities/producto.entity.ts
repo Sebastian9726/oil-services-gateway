@@ -21,6 +21,15 @@ export class Producto {
   @Field(() => Float)
   precio: number;
 
+  @Field(() => Float)
+  costo: number;
+
+  @Field(() => Float)
+  utilidad: number;
+
+  @Field(() => Float)
+  margenUtilidad: number;
+
   @Field(() => Int)
   stockMinimo: number;
 
@@ -45,4 +54,22 @@ export class Producto {
 
   @Field(() => Categoria)
   categoria: Categoria;
+}
+
+@ObjectType()
+export class ProductListResponse {
+  @Field(() => [Producto])
+  products: Producto[];
+
+  @Field()
+  total: number;
+
+  @Field()
+  page: number;
+
+  @Field()
+  limit: number;
+
+  @Field()
+  totalPages: number;
 } 

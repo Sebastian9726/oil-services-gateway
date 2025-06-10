@@ -13,7 +13,7 @@ export class InventoryResolver {
 
   @Query(() => String, { name: 'inventoryOverview' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async getInventoryOverview(): Promise<string> {
     const overview = await this.inventoryService.getInventoryOverview();
     return JSON.stringify(overview);
@@ -21,7 +21,7 @@ export class InventoryResolver {
 
   @Query(() => String, { name: 'tankStatus' })
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente', 'empleado')
+  @Roles('admin', 'manager', 'employee')
   async getTankStatus(): Promise<string> {
     const tanks = await this.inventoryService.getTankStatus();
     return JSON.stringify(tanks);

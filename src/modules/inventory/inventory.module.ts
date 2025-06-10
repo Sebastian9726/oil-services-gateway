@@ -5,6 +5,8 @@ import { ProductsService } from './products.service';
 import { ProductsResolver } from './products.resolver';
 import { CategoriesService } from './categories.service';
 import { CategoriesResolver } from './categories.resolver';
+import { SurtidoresService } from './surtidores.service';
+import { SurtidoresResolver } from './surtidores.resolver';
 
 @Module({
   providers: [
@@ -14,7 +16,9 @@ import { CategoriesResolver } from './categories.resolver';
     ProductsResolver,
     CategoriesService,
     CategoriesResolver,
+    SurtidoresService,
+    SurtidoresResolver,
   ],
-  exports: [InventoryService, ProductsService, CategoriesService],
+  exports: [InventoryService, ProductsService, CategoriesService, SurtidoresService],
 })
 export class InventoryModule {} 

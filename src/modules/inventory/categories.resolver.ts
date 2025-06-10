@@ -16,23 +16,23 @@ export class CategoriesResolver {
 
   @Mutation(() => Categoria)
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
-  async createCategoria(@Args('createCategoriaInput') createCategoriaInput: CreateCategoriaInput): Promise<Categoria> {
+  @Roles('admin', 'manager')
+  async createCategory(@Args('createCategoriaInput') createCategoriaInput: CreateCategoriaInput): Promise<Categoria> {
     return this.categoriesService.create(createCategoriaInput);
   }
 
   @Query(() => [Categoria], { name: 'categories' })
-  async findAllCategories(): Promise<Categoria[]> {
+  async findAll(): Promise<Categoria[]> {
     return this.categoriesService.findAll();
   }
 
   @Query(() => [Categoria], { name: 'activeCategories' })
-  async findActiveCategories(): Promise<Categoria[]> {
+  async findActive(): Promise<Categoria[]> {
     return this.categoriesService.findActive();
   }
 
   @Query(() => Categoria, { name: 'category' })
-  async findOneCategory(@Args('id', { type: () => ID }) id: string): Promise<Categoria> {
+  async findOne(@Args('id', { type: () => ID }) id: string): Promise<Categoria> {
     const category = await this.categoriesService.findById(id);
     if (!category) {
       throw new Error('Categoría no encontrada');
@@ -42,8 +42,8 @@ export class CategoriesResolver {
 
   @Mutation(() => Categoria)
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
-  async updateCategoria(
+  @Roles('admin', 'manager')
+  async updateCategory(
     @Args('id', { type: () => ID }) id: string,
     @Args('updateCategoriaInput') updateCategoriaInput: UpdateCategoriaInput,
   ): Promise<Categoria> {
@@ -52,14 +52,14 @@ export class CategoriesResolver {
 
   @Mutation(() => Categoria)
   @UseGuards(RolesGuard)
-  @Roles('admin')
-  async removeCategoria(@Args('id', { type: () => ID }) id: string): Promise<Categoria> {
+  @Roles('admin', 'manager')
+  async removeCategory(@Args('id', { type: () => ID }) id: string): Promise<Categoria> {
     return this.categoriesService.remove(id);
   }
 
   @Mutation(() => Categoria)
   @UseGuards(RolesGuard)
-  @Roles('admin', 'gerente')
+  @Roles('admin', 'manager')
   async toggleCategoriaStatus(@Args('id', { type: () => ID }) id: string): Promise<Categoria> {
     return this.categoriesService.toggleCategoriaStatus(id);
   }
