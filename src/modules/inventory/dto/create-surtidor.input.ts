@@ -1,5 +1,5 @@
-import { InputType, Field, Int } from '@nestjs/graphql';
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsInt, Min, IsArray, ValidateNested } from 'class-validator';
+import { InputType, Field, Int, Float } from '@nestjs/graphql';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsInt, Min, IsArray, ValidateNested, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
 @InputType()
@@ -13,6 +13,18 @@ export class CreateMangueraInput {
   @IsOptional()
   @IsString()
   color?: string;
+
+  @Field(() => Float, { defaultValue: 0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lecturaAnterior?: number;
+
+  @Field(() => Float, { defaultValue: 0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lecturaActual?: number;
 
   @Field()
   @IsString()

@@ -302,6 +302,22 @@ export class ProductsResolver {
     let valorTotalGeneral = 0;
 
     try {
+      // Validar que el turno existe antes de procesar
+      const turnoExists = await this.productsService.validateTurnoExists(cierreTurnoInput.turnoId);
+      if (!turnoExists) {
+        return {
+          resumenSurtidores: [],
+          totalGeneralLitros: 0,
+          totalGeneralGalones: 0,
+          valorTotalGeneral: 0,
+          fechaProceso: new Date(),
+          turnoId: cierreTurnoInput.turnoId,
+          productosActualizados: 0,
+          estado: 'fallido',
+          errores: [`Turno no encontrado o inválido: ${cierreTurnoInput.turnoId}`]
+        };
+      }
+
       // Validar que todos los surtidores existen antes de procesar
       for (const surtidor of cierreTurnoInput.lecturasSurtidores) {
         const surtidorExists = await this.surtidoresService.validateSurtidorExists(surtidor.numeroSurtidor);
@@ -355,6 +371,8 @@ export class ProductsResolver {
               continue;
             }
 
+            console.log(`[DEBUG] Producto encontrado: ${product.codigo}, Stock actual: ${product.stockActual}`);
+
             // Calcular cantidad vendida
             const cantidadVendida = manguera.lecturaActual - manguera.lecturaAnterior;
             if (cantidadVendida < 0) {
@@ -384,17 +402,65 @@ export class ProductsResolver {
             cantidadLitros = Math.round(cantidadLitros * 100) / 100;
             cantidadGalones = Math.round(cantidadGalones * 100) / 100;
 
+            console.log(`[DEBUG] Cantidad a descontar: ${cantidadLitros} litros (${cantidadVendida} ${manguera.unidadMedida})`);
+            console.log(`[DEBUG] Stock disponible: ${product.stockActual} litros`);
+            
             // Calcular precios
             const precioLitro = product.precio;
             const precioGalon = Math.round(precioLitro / LITROS_TO_GALONES * 100) / 100;
             const valorVenta = cantidadLitros * precioLitro;
 
-            // Actualizar stock del producto (restar del inventario)
-            await this.productsService.updateStock(product.id, cantidadLitros, 'salida');
-            productosActualizados++;
+            // PRIMERO: Actualizar lecturas de la manguera SIEMPRE (independiente del stock)
+            console.log(`[DEBUG] Actualizando lecturas: surtidor=${surtidor.numeroSurtidor}, manguera=${manguera.numeroManguera}, nuevaLectura=${manguera.lecturaActual}`);
+            
+            try {
+              const lecturaActualizada = await this.surtidoresService.updateMangueraReadingsWithHistory(
+                surtidor.numeroSurtidor,
+                manguera.numeroManguera,
+                manguera.lecturaActual, // La nueva lectura del cierre
+                precioLitro,
+                'cierre_turno',
+                user.id,
+                cierreTurnoInput.turnoId,
+                undefined, // cierreTurnoId se asignará después
+                `Cierre de turno - Cantidad vendida: ${cantidadLitros} litros`
+              );
+              
+              console.log(`[DEBUG] Resultado actualización lecturas:`, lecturaActualizada);
+              
+              if (!lecturaActualizada.success) {
+                advertencias.push(`No se pudo actualizar lecturas para surtidor ${surtidor.numeroSurtidor}, manguera ${manguera.numeroManguera}`);
+              } else {
+                console.log(`[DEBUG] Lecturas actualizadas exitosamente - Cantidad vendida calculada: ${lecturaActualizada.cantidadVendida}L`);
+                // Verificar que los cálculos coincidan
+                const diferencia = Math.abs(cantidadLitros - lecturaActualizada.cantidadVendida);
+                if (diferencia > 0.01) { // Tolerancia de 0.01 litros
+                  advertencias.push(`Diferencia en cálculos para surtidor ${surtidor.numeroSurtidor}, manguera ${manguera.numeroManguera}: esperado ${cantidadLitros}L, calculado ${lecturaActualizada.cantidadVendida}L`);
+                }
+              }
+            } catch (lecturaError) {
+              console.error(`[ERROR] Actualizando lecturas:`, lecturaError);
+              advertencias.push(`Error actualizando lecturas en surtidor ${surtidor.numeroSurtidor}, manguera ${manguera.numeroManguera}: ${lecturaError.message}`);
+            }
 
-            // Si es combustible, también actualizar el tanque físico
-            if (product.esCombustible) {
+            // SEGUNDO: Verificar stock y actualizar inventario solo si hay suficiente
+            let stockActualizado = false;
+            if (cantidadLitros > product.stockActual) {
+              errores.push(`Stock insuficiente para ${manguera.codigoProducto} en surtidor ${surtidor.numeroSurtidor}: necesario ${cantidadLitros}L, disponible ${product.stockActual}L`);
+            } else {
+              try {
+                // Actualizar stock del producto (restar del inventario)
+                await this.productsService.updateStock(product.id, cantidadLitros, 'salida');
+                productosActualizados++;
+                stockActualizado = true;
+                console.log(`[DEBUG] Stock actualizado exitosamente para ${product.codigo}`);
+              } catch (stockError) {
+                errores.push(`Error actualizando stock de ${manguera.codigoProducto}: ${stockError.message}`);
+              }
+            }
+
+            // TERCERO: Actualizar tanque físico solo si se actualizó el stock
+            if (stockActualizado && product.esCombustible) {
               try {
                 const tanqueActualizado = await this.productsService.updateTankLevel(product.id, cantidadLitros, 'salida');
                 if (tanqueActualizado) {
@@ -405,7 +471,7 @@ export class ProductsResolver {
               }
             }
 
-            // Agregar a resumen
+            // CUARTO: Agregar a resumen siempre (aunque no se haya actualizado stock)
             ventasCalculadas.push({
               codigoProducto: manguera.codigoProducto,
               nombreProducto: product.nombre,
@@ -579,5 +645,26 @@ export class ProductsResolver {
   async getTankStatus(): Promise<string> {
     const tanks = await this.productsService.getTankStatus();
     return JSON.stringify(tanks);
+  }
+
+  @Query(() => String, { name: 'debugProductStock' })
+  @UseGuards(RolesGuard) 
+  @Roles('admin', 'manager', 'employee')
+  async debugProductStock(@Args('codigo') codigo: string): Promise<string> {
+    const product = await this.productsService.findByCode(codigo);
+    if (!product) {
+      return JSON.stringify({ error: `Producto ${codigo} no encontrado` });
+    }
+    
+    return JSON.stringify({
+      codigo: product.codigo,
+      nombre: product.nombre,
+      stockActual: product.stockActual,
+      stockMinimo: product.stockMinimo,
+      unidadMedida: product.unidadMedida,
+      precio: product.precio,
+      esCombustible: product.esCombustible,
+      activo: product.activo
+    });
   }
 } 

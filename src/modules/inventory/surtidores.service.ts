@@ -55,6 +55,8 @@ export class SurtidoresService {
             create: createSurtidorInput.mangueras.map(manguera => ({
               numero: manguera.numero,
               color: manguera.color,
+              lecturaAnterior: manguera.lecturaAnterior ?? 0,
+              lecturaActual: manguera.lecturaActual ?? 0,
               productoId: manguera.productoId,
               activo: manguera.activo ?? true,
             })),
@@ -80,36 +82,48 @@ export class SurtidoresService {
 
   async findAll(page = 1, limit = 10, activo?: boolean): Promise<SurtidorListResponse> {
     try {
-      const skip = (page - 1) * limit;
+      // Si limit es -1, obtener todos los registros sin paginación
+      const usesPagination = limit !== -1;
+      const skip = usesPagination ? (page - 1) * limit : 0;
       
       const whereCondition: any = {};
       if (activo !== undefined) {
         whereCondition.activo = activo;
       }
 
-      const [surtidores, total] = await Promise.all([
-        this.prisma.surtidor.findMany({
-          where: whereCondition,
-          include: {
-            mangueras: {
-              include: {
-                producto: true,
-              },
-              orderBy: { numero: 'asc' },
+      // Configurar la query
+      const queryOptions: any = {
+        where: whereCondition,
+        include: {
+          mangueras: {
+            include: {
+              producto: true,
             },
+            orderBy: { numero: 'asc' },
           },
-          orderBy: { numero: 'asc' },
-          skip,
-          take: limit,
-        }),
+        },
+        orderBy: { numero: 'asc' },
+      };
+
+      // Solo agregar skip y take si se usa paginación
+      if (usesPagination) {
+        queryOptions.skip = skip;
+        queryOptions.take = limit;
+      }
+
+      const [surtidores, total] = await Promise.all([
+        this.prisma.surtidor.findMany(queryOptions),
         this.prisma.surtidor.count({ where: whereCondition }),
       ]);
+
+      const actualLimit = usesPagination ? limit : total;
+      const actualPage = usesPagination ? page : 1;
 
       return {
         surtidores: surtidores.map(this.formatSurtidor),
         total,
-        page,
-        limit,
+        page: actualPage,
+        limit: actualLimit,
       };
     } catch (error) {
       throw new Error(`Error fetching surtidores: ${error.message}`);
@@ -200,6 +214,8 @@ export class SurtidoresService {
             create: updateSurtidorInput.mangueras.map(manguera => ({
               numero: manguera.numero,
               color: manguera.color,
+              lecturaAnterior: manguera.lecturaAnterior ?? 0,
+              lecturaActual: manguera.lecturaActual ?? 0,
               productoId: manguera.productoId,
               activo: manguera.activo ?? true,
             })),
@@ -285,6 +301,305 @@ export class SurtidoresService {
     }
   }
 
+  async updateMangueraReadings(numeroSurtidor: string, numeroManguera: string, lecturaAnterior: number, lecturaActual: number): Promise<boolean> {
+    try {
+      const manguera = await this.prisma.mangueraSurtidor.findFirst({
+        where: {
+          numero: numeroManguera,
+          surtidor: {
+            numero: numeroSurtidor,
+          },
+        },
+      });
+
+      if (!manguera) {
+        return false;
+      }
+
+      await this.prisma.mangueraSurtidor.update({
+        where: { id: manguera.id },
+        data: {
+          lecturaAnterior,
+          lecturaActual,
+        },
+      });
+
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Actualiza las lecturas de una manguera y crea un registro de historial
+   * ESTA ES LA LÓGICA CORRECTA PARA USAR EN PROCESS SHIFT CLOSURE
+   */
+  async updateMangueraReadingsWithHistory(
+    numeroSurtidor: string, 
+    numeroManguera: string, 
+    nuevaLectura: number,
+    precio: number,
+    tipoOperacion: string = 'cierre_turno',
+    usuarioId?: string,
+    turnoId?: string,
+    cierreTurnoId?: string,
+    observaciones?: string
+  ): Promise<{ success: boolean; cantidadVendida: number; valorVenta: number }> {
+    console.log(`[SURTIDORES] updateMangueraReadingsWithHistory iniciado:`, {
+      numeroSurtidor,
+      numeroManguera,
+      nuevaLectura,
+      precio,
+      tipoOperacion,
+      usuarioId,
+      turnoId
+    });
+
+    try {
+      const manguera = await this.prisma.mangueraSurtidor.findFirst({
+        where: {
+          numero: numeroManguera,
+          surtidor: {
+            numero: numeroSurtidor,
+            activo: true,
+          },
+          activo: true,
+        },
+        include: {
+          producto: true,
+        },
+      });
+
+      console.log(`[SURTIDORES] Manguera encontrada:`, manguera ? {
+        id: manguera.id,
+        numero: manguera.numero,
+        lecturaAnterior: manguera.lecturaAnterior,
+        lecturaActual: manguera.lecturaActual,
+        producto: manguera.producto.codigo
+      } : 'NO ENCONTRADA');
+
+      if (!manguera) {
+        console.error(`[SURTIDORES] Manguera no encontrada: ${numeroSurtidor}/${numeroManguera}`);
+        return { success: false, cantidadVendida: 0, valorVenta: 0 };
+      }
+
+      // OBTENER LA LECTURA ACTUAL DE LA BASE DE DATOS (será la "anterior" en el historial)
+      const lecturaAnteriorDB = Number(manguera.lecturaActual) || 0;
+      const cantidadVendida = Math.max(0, nuevaLectura - lecturaAnteriorDB);
+      const valorVenta = cantidadVendida * precio;
+
+      console.log(`[SURTIDORES] Cálculos:`, {
+        lecturaAnteriorDB,
+        nuevaLectura,
+        cantidadVendida,
+        valorVenta
+      });
+
+      // Actualizar las lecturas en la manguera
+      const mangueraActualizada = await this.prisma.mangueraSurtidor.update({
+        where: { id: manguera.id },
+        data: {
+          lecturaAnterior: lecturaAnteriorDB, // La lectura que tenía se vuelve "anterior"
+          lecturaActual: nuevaLectura,        // La nueva lectura se vuelve "actual"
+        },
+      });
+
+      console.log(`[SURTIDORES] Manguera actualizada en BD:`, {
+        id: mangueraActualizada.id,
+        lecturaAnterior: mangueraActualizada.lecturaAnterior,
+        lecturaActual: mangueraActualizada.lecturaActual
+      });
+
+      // Crear registro en el historial
+      const historialCreado = await this.prisma.historialLectura.create({
+        data: {
+          mangueraId: manguera.id,
+          fechaLectura: new Date(),
+          lecturaAnterior: lecturaAnteriorDB,
+          lecturaActual: nuevaLectura,
+          cantidadVendida,
+          valorVenta,
+          tipoOperacion,
+          observaciones,
+          usuarioId,
+          turnoId,
+          cierreTurnoId,
+        },
+      });
+
+      console.log(`[SURTIDORES] Historial creado:`, {
+        id: historialCreado.id,
+        lecturaAnterior: historialCreado.lecturaAnterior,
+        lecturaActual: historialCreado.lecturaActual,
+        cantidadVendida: historialCreado.cantidadVendida
+      });
+
+      return { success: true, cantidadVendida, valorVenta };
+    } catch (error) {
+      console.error('[SURTIDORES] Error updating manguera readings with history:', error);
+      return { success: false, cantidadVendida: 0, valorVenta: 0 };
+    }
+  }
+
+  /**
+   * Obtiene el historial de lecturas de una manguera específica
+   */
+  async getMangueraReadingHistory(
+    numeroSurtidor: string,
+    numeroManguera: string,
+    fechaDesde?: Date,
+    fechaHasta?: Date,
+    page: number = 1,
+    limit: number = 20
+  ) {
+    try {
+      const skip = (page - 1) * limit;
+      
+      const where = {
+        manguera: {
+          numero: numeroManguera,
+          surtidor: {
+            numero: numeroSurtidor,
+          },
+        },
+        ...(fechaDesde && fechaHasta && {
+          fechaLectura: {
+            gte: fechaDesde,
+            lte: fechaHasta,
+          },
+        }),
+      };
+
+      const [historialRaw, total] = await Promise.all([
+        this.prisma.historialLectura.findMany({
+          where,
+          include: {
+            manguera: {
+              include: {
+                surtidor: true,
+                producto: true,
+              },
+            },
+          },
+          orderBy: { fechaLectura: 'desc' },
+          skip,
+          take: limit,
+        }),
+        this.prisma.historialLectura.count({ where }),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
+      // Format the response to match GraphQL types
+      const historial = historialRaw.map(item => ({
+        id: item.id,
+        fechaLectura: item.fechaLectura,
+        lecturaAnterior: Number(item.lecturaAnterior),
+        lecturaActual: Number(item.lecturaActual),
+        cantidadVendida: Number(item.cantidadVendida),
+        valorVenta: Number(item.valorVenta),
+        tipoOperacion: item.tipoOperacion,
+        observaciones: item.observaciones,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        mangueraId: item.mangueraId,
+        manguera: {
+          id: item.manguera.id,
+          numero: item.manguera.numero,
+          color: item.manguera.color,
+          lecturaAnterior: Number(item.manguera.lecturaAnterior),
+          lecturaActual: Number(item.manguera.lecturaActual),
+          activo: item.manguera.activo,
+          createdAt: item.manguera.createdAt,
+          updatedAt: item.manguera.updatedAt,
+          surtidorId: item.manguera.surtidorId,
+          surtidor: item.manguera.surtidor,
+          productoId: item.manguera.productoId,
+          producto: {
+            id: item.manguera.producto.id,
+            codigo: item.manguera.producto.codigo,
+            nombre: item.manguera.producto.nombre,
+            descripcion: item.manguera.producto.descripcion,
+            unidadMedida: item.manguera.producto.unidadMedida,
+            precio: Number(item.manguera.producto.precio),
+            costo: 0, // Default value - not in schema
+            utilidad: 0, // Default value - not in schema  
+            margenUtilidad: 0, // Default value - not in schema
+            stockMinimo: item.manguera.producto.stockMinimo,
+            stockActual: item.manguera.producto.stockActual,
+            esCombustible: item.manguera.producto.esCombustible,
+            activo: item.manguera.producto.activo,
+            createdAt: item.manguera.producto.createdAt,
+            updatedAt: item.manguera.producto.updatedAt,
+            categoriaId: item.manguera.producto.categoriaId,
+            categoria: {
+              id: '',
+              nombre: '',
+              descripcion: null,
+              activo: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          },
+        },
+        usuarioId: item.usuarioId,
+        turnoId: item.turnoId,
+        cierreTurnoId: item.cierreTurnoId,
+      }));
+
+      return {
+        historial,
+        total,
+        totalPages,
+        currentPage: page,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      };
+    } catch (error) {
+      throw new Error(`Error getting reading history: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtiene todas las lecturas actuales de un surtidor
+   */
+  async getCurrentReadings(numeroSurtidor: string) {
+    try {
+      const surtidor = await this.prisma.surtidor.findFirst({
+        where: {
+          numero: numeroSurtidor,
+          activo: true,
+        },
+        include: {
+          mangueras: {
+            where: { activo: true },
+            include: {
+              producto: true,
+            },
+            orderBy: { numero: 'asc' },
+          },
+        },
+      });
+
+      if (!surtidor) {
+        throw new NotFoundException(`Surtidor ${numeroSurtidor} no encontrado`);
+      }
+
+      return surtidor.mangueras.map(manguera => ({
+        numeroManguera: manguera.numero,
+        lecturaAnterior: Number(manguera.lecturaAnterior) || 0,
+        lecturaActual: Number(manguera.lecturaActual) || 0,
+        producto: {
+          codigo: manguera.producto.codigo,
+          nombre: manguera.producto.nombre,
+          precio: Number(manguera.producto.precio),
+        },
+      }));
+    } catch (error) {
+      throw new Error(`Error getting current readings: ${error.message}`);
+    }
+  }
+
   private formatSurtidor(surtidor: any): Surtidor {
     return {
       id: surtidor.id,
@@ -303,6 +618,8 @@ export class SurtidoresService {
         id: manguera.id,
         numero: manguera.numero,
         color: manguera.color,
+        lecturaAnterior: Number(manguera.lecturaAnterior) || 0,
+        lecturaActual: Number(manguera.lecturaActual) || 0,
         activo: manguera.activo,
         createdAt: manguera.createdAt,
         updatedAt: manguera.updatedAt,

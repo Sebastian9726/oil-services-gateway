@@ -353,33 +353,34 @@ export class ProductsService {
   }
 
   async getTankStatus() {
-    try {
-      const tanques = await this.prisma.tanque.findMany({
-        where: { activo: true },
-        include: {
-          producto: {
+    const tanks = await this.prisma.producto.findMany({
+      where: { esCombustible: true },
             select: {
+        id: true,
               codigo: true,
               nombre: true,
-              unidadMedida: true
-            }
-          }
-        },
-        orderBy: { numero: 'asc' },
+        stockActual: true,
+        stockMinimo: true
+      }
       });
 
-      return tanques.map(tanque => ({
-        numero: tanque.numero,
-        nivelActual: parseFloat(tanque.nivelActual.toString()),
-        capacidadTotal: parseFloat(tanque.capacidadTotal.toString()),
-        nivelMinimo: parseFloat(tanque.nivelMinimo.toString()),
-        porcentajeLlenado: Math.round((parseFloat(tanque.nivelActual.toString()) / parseFloat(tanque.capacidadTotal.toString())) * 100),
-        producto: tanque.producto,
-        estado: parseFloat(tanque.nivelActual.toString()) <= parseFloat(tanque.nivelMinimo.toString()) ? 'BAJO' : 'NORMAL',
-        updatedAt: tanque.updatedAt
-      }));
+    return tanks.map(tank => ({
+      ...tank,
+      nivelTanque: tank.stockActual,
+      alertaBajo: tank.stockActual <= tank.stockMinimo,
+      estado: tank.stockActual <= tank.stockMinimo ? 'BAJO' : 'NORMAL'
+    }));
+  }
+
+  async validateTurnoExists(turnoId: string): Promise<boolean> {
+    try {
+      const turno = await this.prisma.turno.findUnique({
+        where: { id: turnoId }
+      });
+      return !!turno;
     } catch (error) {
-      throw new Error(`Error consultando tanques: ${error.message}`);
+      console.error('Error validating turno:', error);
+      return false;
     }
   }
 

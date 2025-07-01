@@ -52,6 +52,7 @@ model Usuario {
   turnos        Turno[]
   ventas        Venta[]
   cierresTurno  CierreTurno[]
+  historialLecturas HistorialLectura[]
   
   @@map("usuarios")
   @@schema("usuarios")
@@ -77,6 +78,7 @@ model Turno {
   usuario         Usuario?  @relation(fields: [usuarioId], references: [id])
   ventas          Venta[]
   cierres         CierreTurno[]
+  historialLecturas HistorialLectura[]
   
   @@map("turnos")
   @@schema("turnos")
@@ -103,6 +105,7 @@ model CierreTurno {
   turno                 Turno     @relation(fields: [turnoId], references: [id])
   usuarioId             String    // Usuario que realizó el cierre
   usuario               Usuario   @relation(fields: [usuarioId], references: [id])
+  historialLecturas     HistorialLectura[]
   
   @@map("cierres_turno")
   @@schema("turnos")
@@ -222,6 +225,8 @@ model MangueraSurtidor {
   id            String    @id @default(cuid())
   numero        String    // Número de la manguera (ej: "M1", "M2")
   color         String?   // Color identificativo de la manguera
+  lecturaAnterior Decimal @db.Decimal(12, 3) @default(0) // Lectura anterior del contador
+  lecturaActual   Decimal @db.Decimal(12, 3) @default(0) // Lectura actual del contador
   activo        Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -231,9 +236,36 @@ model MangueraSurtidor {
   surtidor      Surtidor  @relation(fields: [surtidorId], references: [id], onDelete: Cascade)
   productoId    String
   producto      Producto  @relation(fields: [productoId], references: [id])
+  historialLecturas HistorialLectura[]
   
   @@unique([surtidorId, numero])
   @@map("mangueras_surtidor")
+  @@schema("inventario")
+}
+
+model HistorialLectura {
+  id                String    @id @default(cuid())
+  fechaLectura      DateTime  @default(now())
+  lecturaAnterior   Decimal   @db.Decimal(12, 3)
+  lecturaActual     Decimal   @db.Decimal(12, 3)
+  cantidadVendida   Decimal   @db.Decimal(12, 3) // lecturaActual - lecturaAnterior
+  valorVenta        Decimal   @db.Decimal(12, 2) // cantidadVendida * precio
+  tipoOperacion     String    // "cierre_turno", "ajuste_manual", "calibracion"
+  observaciones     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relaciones
+  mangueraId        String
+  manguera          MangueraSurtidor @relation(fields: [mangueraId], references: [id], onDelete: Cascade)
+  usuarioId         String?   // Usuario que realizó la operación
+  usuario           Usuario?  @relation(fields: [usuarioId], references: [id])
+  turnoId           String?   // Turno asociado (si aplica)
+  turno             Turno?    @relation(fields: [turnoId], references: [id])
+  cierreTurnoId     String?   // Cierre de turno asociado (si aplica)
+  cierreTurno       CierreTurno? @relation(fields: [cierreTurnoId], references: [id])
+  
+  @@map("historial_lecturas")
   @@schema("inventario")
 }
 

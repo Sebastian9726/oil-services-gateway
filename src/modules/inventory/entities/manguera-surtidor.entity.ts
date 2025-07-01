@@ -1,4 +1,4 @@
-import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { ObjectType, Field, ID, Float } from '@nestjs/graphql';
 import { Producto } from './producto.entity';
 
 @ObjectType()
@@ -11,6 +11,12 @@ export class MangueraSurtidor {
 
   @Field({ nullable: true })
   color?: string;
+
+  @Field(() => Float)
+  lecturaAnterior: number;
+
+  @Field(() => Float)
+  lecturaActual: number;
 
   @Field()
   activo: boolean;
