@@ -1,0 +1,32 @@
+
+Opción A: Desarrollo Rápido (Recomendado para tu caso)
+
+1. Modificar el schema de prims
+
+2.  Generar el Cliente de Prisma
+
+npx prisma generate
+
+2. Sincronizar con la Base de Datos
+
+npx prisma db push
+
+
+Opción B: Producción con Migraciones
+
+1. Modificar el schema de prisma
+
+npx prisma migrate deploy 
+
+2. Crear migracion, este comando se encarga de comparar el schema actual con el anterior y genera un nuevo sql.
+Aplica cambios a la db de dev y actualiza el cliente de prisma
+
+npx prisma migrate dev --name "agregar-relacion-usuario-empresa"
+
+3. Revisar la migracion generada
+
+4. Aplicar en producción los cambios
+
+npx prisma migrate deploy
+
+ 

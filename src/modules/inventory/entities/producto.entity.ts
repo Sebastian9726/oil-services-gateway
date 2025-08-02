@@ -19,16 +19,23 @@ export class Producto {
   unidadMedida: string;
 
   @Field(() => Float)
-  precio: number;
+  precioCompra: number;
 
   @Field(() => Float)
-  costo: number;
+  precioVenta: number;
+
+  @Field()
+  moneda: string; // Código ISO de la moneda (COP, USD, EUR, etc.)
+
+  // Campos calculados
+  @Field(() => Float)
+  utilidad: number; // precioVenta - precioCompra
 
   @Field(() => Float)
-  utilidad: number;
+  margenUtilidad: number; // ((precioVenta - precioCompra) / precioVenta) * 100
 
   @Field(() => Float)
-  margenUtilidad: number;
+  porcentajeGanancia: number; // ((precioVenta - precioCompra) / precioCompra) * 100
 
   @Field(() => Int)
   stockMinimo: number;

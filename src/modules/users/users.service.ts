@@ -9,7 +9,7 @@ import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async create(createUserInput: CreateUserInput): Promise<User> {
     // Verificar si el email ya existe
@@ -39,33 +39,124 @@ export class UsersService {
       throw new NotFoundException('Rol no encontrado');
     }
 
+    // Verificar que los puntos de venta existen (si se proporcionan)
+    if (createUserInput.puntosVentaIds && createUserInput.puntosVentaIds.length > 0) {
+      const puntosVenta = await this.prisma.puntoVenta.findMany({
+        where: { id: { in: createUserInput.puntosVentaIds } },
+      });
+
+      if (puntosVenta.length !== createUserInput.puntosVentaIds.length) {
+        throw new NotFoundException('Uno o más puntos de venta no existen');
+      }
+    }
+
     // Hash de la contraseña
     const hashedPassword = await bcrypt.hash(createUserInput.password, 12);
 
+    const { puntosVentaIds, ...userData } = createUserInput;
+
     const user = await this.prisma.usuario.create({
       data: {
-        ...createUserInput,
+        ...userData,
         password: hashedPassword,
+        puntosVenta: puntosVentaIds ? {
+          connect: puntosVentaIds.map(id => ({ id }))
+        } : undefined,
       },
       include: {
         rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
       },
     });
 
-    return user as User;
+    return this.formatUser(user);
   }
 
   async findAll(): Promise<User[]> {
     const users = await this.prisma.usuario.findMany({
       include: {
         rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
-
-    return users as User[];
+    console.log("users", users)
+    return users.map(user => ({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      password: user.password,
+      nombre: user.nombre,
+      apellido: user.apellido,
+      telefono: user.telefono,
+      activo: user.activo,
+      emailVerified: user.emailVerified,
+      ultimoLogin: user.ultimoLogin,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      rolId: user.rolId,
+      rol: user.rol,
+      puntosVenta: user.puntosVenta.map(pv => ({
+        id: pv.id,
+        codigo: pv.codigo,
+        nombre: pv.nombre,
+        descripcion: pv.descripcion,
+        direccion: pv.direccion,
+        ciudad: pv.ciudad,
+        provincia: pv.provincia,
+        pais: pv.pais,
+        codigoPostal: pv.codigoPostal,
+        telefono: pv.telefono,
+        telefonoMovil: pv.telefonoMovil,
+        email: pv.email,
+        horarioApertura: pv.horarioApertura,
+        horarioCierre: pv.horarioCierre,
+        diasAtencion: pv.diasAtencion,
+        coordenadasGPS: pv.coordenadasGPS,
+        tipoEstacion: pv.tipoEstacion,
+        serviciosAdicionales: pv.serviciosAdicionales,
+        capacidadMaxima: pv.capacidadMaxima,
+        fechaApertura: pv.fechaApertura,
+        activo: pv.activo,
+        createdAt: pv.createdAt,
+        updatedAt: pv.updatedAt,
+        empresaId: pv.empresaId,
+        empresa: {
+          id: pv.empresa.id,
+          rut: pv.empresa.rut,
+          razonSocial: pv.empresa.razonSocial,
+          nombreComercial: pv.empresa.nombreComercial,
+          nombre: pv.empresa.nombre,
+          direccion: pv.empresa.direccion,
+          ciudad: pv.empresa.ciudad,
+          provincia: pv.empresa.provincia,
+          pais: pv.empresa.pais,
+          codigoPostal: pv.empresa.codigoPostal,
+          telefono: pv.empresa.telefono,
+          telefonoMovil: pv.empresa.telefonoMovil,
+          email: pv.empresa.email,
+          sitioWeb: pv.empresa.sitioWeb,
+          logo: pv.empresa.logo,
+          sector: pv.empresa.sector,
+          tipoEmpresa: pv.empresa.tipoEmpresa,
+          fechaConstitucion: pv.empresa.fechaConstitucion,
+          activo: pv.empresa.activo,
+          createdAt: pv.empresa.createdAt,
+          updatedAt: pv.empresa.updatedAt,
+          puntosVenta: [],
+        },
+      })),
+    }));
   }
 
   async findAllWithFilters(
@@ -76,7 +167,7 @@ export class UsersService {
     // Si limit es -1, obtener todos los resultados sin paginación
     const usesPagination = limit !== -1;
     const skip = usesPagination ? (page - 1) * limit : 0;
-    
+
     // Construir las condiciones de filtrado
     const where: any = {};
 
@@ -111,6 +202,11 @@ export class UsersService {
       where,
       include: {
         rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc',
@@ -130,7 +226,7 @@ export class UsersService {
     const actualLimit = usesPagination ? limit : total;
 
     return {
-      users: users as User[],
+      users: users.map(user => this.formatUser(user)),
       total,
       page: usesPagination ? page : 1,
       limit: actualLimit,
@@ -143,10 +239,17 @@ export class UsersService {
       where: { id },
       include: {
         rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
       },
     });
 
-    return user as User | null;
+    if (!user) return null;
+
+    return this.formatUser(user);
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -154,10 +257,17 @@ export class UsersService {
       where: { email },
       include: {
         rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
       },
     });
 
-    return user as User | null;
+    if (!user) return null;
+
+    return this.formatUser(user);
   }
 
   async findByUsername(username: string): Promise<User | null> {
@@ -165,15 +275,20 @@ export class UsersService {
       where: { username },
       include: {
         rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
       },
     });
 
-    return user as User | null;
+    return user ? this.formatUser(user) : null;
   }
 
   async update(id: string, updateUserInput: UpdateUserInput): Promise<User> {
     const existingUser = await this.findById(id);
-    
+
     if (!existingUser) {
       throw new NotFoundException('Usuario no encontrado');
     }
@@ -200,27 +315,48 @@ export class UsersService {
       }
     }
 
-    const updateData: any = { ...updateUserInput };
+    // Verificar que los puntos de venta existen (si se proporcionan)
+    if (updateUserInput.puntosVentaIds && updateUserInput.puntosVentaIds.length > 0) {
+      const puntosVenta = await this.prisma.puntoVenta.findMany({
+        where: { id: { in: updateUserInput.puntosVentaIds } },
+      });
+
+      if (puntosVenta.length !== updateUserInput.puntosVentaIds.length) {
+        throw new NotFoundException('Uno o más puntos de venta no existen');
+      }
+    }
+
+    const { puntosVentaIds, ...updateData } = updateUserInput;
 
     // Si se está actualizando la contraseña, hashearla
-    if (updateUserInput.password) {
-      updateData.password = await bcrypt.hash(updateUserInput.password, 12);
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 12);
     }
 
     const user = await this.prisma.usuario.update({
       where: { id },
-      data: updateData,
+      data: {
+        ...updateData,
+        puntosVenta: puntosVentaIds ? {
+          set: puntosVentaIds.map(id => ({ id }))
+        } : undefined,
+      },
       include: {
         rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
       },
     });
 
-    return user as User;
+    return this.formatUser(user);
   }
 
   async remove(id: string): Promise<User> {
     const existingUser = await this.findById(id);
-    
+
     if (!existingUser) {
       throw new NotFoundException('Usuario no encontrado');
     }
@@ -231,10 +367,15 @@ export class UsersService {
       data: { activo: false },
       include: {
         rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
       },
     });
 
-    return user as User;
+    return this.formatUser(user);
   }
 
   async updateLastLogin(id: string): Promise<void> {
@@ -246,7 +387,7 @@ export class UsersService {
 
   async changePassword(id: string, newPassword: string): Promise<boolean> {
     const hashedPassword = await bcrypt.hash(newPassword, 12);
-    
+
     await this.prisma.usuario.update({
       where: { id },
       data: { password: hashedPassword },
@@ -257,7 +398,7 @@ export class UsersService {
 
   async toggleUserStatus(id: string): Promise<User> {
     const user = await this.findById(id);
-    
+
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
     }
@@ -267,10 +408,15 @@ export class UsersService {
       data: { activo: !user.activo },
       include: {
         rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
       },
     });
 
-    return updatedUser as User;
+    return this.formatUser(updatedUser);
   }
 
   async findUsersByRole(roleName: string): Promise<User[]> {
@@ -283,12 +429,128 @@ export class UsersService {
       },
       include: {
         rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    return users as User[];
+    return users.map(user => this.formatUser(user));
+  }
+
+  async addPointOfSaleToUser(userId: string, pointOfSaleId: string): Promise<User> {
+    const user = await this.prisma.usuario.update({
+      where: { id: userId },
+      data: {
+        puntosVenta: {
+          connect: { id: pointOfSaleId }
+        }
+      },
+      include: {
+        rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
+      },
+    });
+
+    return this.formatUser(user);
+  }
+
+  async removePointOfSaleFromUser(userId: string, pointOfSaleId: string): Promise<User> {
+    const user = await this.prisma.usuario.update({
+      where: { id: userId },
+      data: {
+        puntosVenta: {
+          disconnect: { id: pointOfSaleId }
+        }
+      },
+      include: {
+        rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
+      },
+    });
+
+    return this.formatUser(user);
+  }
+
+  private formatUser(user: any): User {
+    return {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      password: user.password,
+      nombre: user.nombre,
+      apellido: user.apellido,
+      telefono: user.telefono,
+      activo: user.activo,
+      emailVerified: user.emailVerified,
+      ultimoLogin: user.ultimoLogin,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      rolId: user.rolId,
+      rol: user.rol,
+      puntosVenta: user.puntosVenta.map(pv => ({
+        id: pv.id,
+        codigo: pv.codigo,
+        nombre: pv.nombre,
+        descripcion: pv.descripcion,
+        direccion: pv.direccion,
+        ciudad: pv.ciudad,
+        provincia: pv.provincia,
+        pais: pv.pais,
+        codigoPostal: pv.codigoPostal,
+        telefono: pv.telefono,
+        telefonoMovil: pv.telefonoMovil,
+        email: pv.email,
+        horarioApertura: pv.horarioApertura,
+        horarioCierre: pv.horarioCierre,
+        diasAtencion: pv.diasAtencion,
+        coordenadasGPS: pv.coordenadasGPS,
+        tipoEstacion: pv.tipoEstacion,
+        serviciosAdicionales: pv.serviciosAdicionales,
+        capacidadMaxima: pv.capacidadMaxima,
+        fechaApertura: pv.fechaApertura,
+        activo: pv.activo,
+        createdAt: pv.createdAt,
+        updatedAt: pv.updatedAt,
+        empresaId: pv.empresaId,
+        empresa: {
+          id: pv.empresa.id,
+          rut: pv.empresa.rut,
+          razonSocial: pv.empresa.razonSocial,
+          nombreComercial: pv.empresa.nombreComercial,
+          nombre: pv.empresa.nombre,
+          direccion: pv.empresa.direccion,
+          ciudad: pv.empresa.ciudad,
+          provincia: pv.empresa.provincia,
+          pais: pv.empresa.pais,
+          codigoPostal: pv.empresa.codigoPostal,
+          telefono: pv.empresa.telefono,
+          telefonoMovil: pv.empresa.telefonoMovil,
+          email: pv.empresa.email,
+          sitioWeb: pv.empresa.sitioWeb,
+          logo: pv.empresa.logo,
+          sector: pv.empresa.sector,
+          tipoEmpresa: pv.empresa.tipoEmpresa,
+          fechaConstitucion: pv.empresa.fechaConstitucion,
+          activo: pv.empresa.activo,
+          createdAt: pv.empresa.createdAt,
+          updatedAt: pv.empresa.updatedAt,
+          puntosVenta: [],
+        },
+      })),
+    };
   }
 } 

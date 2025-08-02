@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["multiSchema"]
@@ -9,136 +6,204 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["usuarios", "inventario", "ventas", "reportes", "clientes", "turnos"]
+  schemas  = ["clientes", "configuracion", "inventario", "reportes", "turnos", "usuarios", "ventas"]
 }
 
-// =======================================
-// ESQUEMA: USUARIOS
-// =======================================
+model Empresa {
+  id                String       @id @default(cuid())
+  rut               String       @unique
+  razonSocial       String
+  nombreComercial   String?
+  nombre            String
+  direccion         String
+  ciudad            String
+  provincia         String?
+  pais              String       @default("Perú")
+  codigoPostal      String?
+  telefono          String?
+  telefonoMovil     String?
+  email             String?      @unique
+  sitioWeb          String?
+  logo              String?
+  sector            String?
+  tipoEmpresa       String?
+  fechaConstitucion DateTime?
+  activo            Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  puntosVenta       PuntoVenta[]
+  usuarios          Usuario[]
+
+  @@map("empresas")
+  @@schema("configuracion")
+}
+
+model PuntoVenta {
+  id                   String             @id @default(cuid())
+  codigo               String             @unique
+  nombre               String
+  descripcion          String?
+  direccion            String
+  ciudad               String
+  provincia            String?
+  pais                 String             @default("Perú")
+  codigoPostal         String?
+  telefono             String?
+  telefonoMovil        String?
+  email                String?
+  horarioApertura      String?
+  horarioCierre        String?
+  diasAtencion         String[]
+  coordenadasGPS       String?
+  tipoEstacion         String?
+  serviciosAdicionales String[]
+  capacidadMaxima      Int?
+  fechaApertura        DateTime?
+  activo               Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  empresaId            String
+  empresa              Empresa            @relation(fields: [empresaId], references: [id])
+  surtidores           Surtidor[]
+  tanques              Tanque[]
+  inventarioActual     InventarioActual[]
+  ventasDiarias        VentaDiaria[]
+  turnos               Turno[]
+  ventas               Venta[]
+  usuarios             Usuario[]          @relation("PuntoVentaToUsuario")
+
+  @@map("puntos_venta")
+  @@schema("configuracion")
+}
 
 model Rol {
   id          String    @id @default(cuid())
   nombre      String    @unique
   descripcion String?
-  permisos    String[]  // Array de permisos como cadenas
+  permisos    String[]
   activo      Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  
-  // Relaciones
   usuarios    Usuario[]
-  
+
   @@map("roles")
   @@schema("usuarios")
 }
 
 model Usuario {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  username      String    @unique
-  password      String
-  nombre        String
-  apellido      String
-  telefono      String?
-  activo        Boolean   @default(true)
-  emailVerified Boolean   @default(false)
-  ultimoLogin   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // Relaciones
-  rolId         String
-  rol           Rol       @relation(fields: [rolId], references: [id])
-  turnos        Turno[]
-  ventas        Venta[]
-  cierresTurno  CierreTurno[]
+  id                String             @id @default(cuid())
+  email             String             @unique
+  username          String             @unique
+  password          String
+  nombre            String
+  apellido          String
+  telefono          String?
+  activo            Boolean            @default(true)
+  emailVerified     Boolean            @default(false)
+  ultimoLogin       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  rolId             String
+  empresaId         String?
   historialLecturas HistorialLectura[]
-  
+  cierresTurno      CierreTurno[]
+  turnos            Turno[]
+  empresa           Empresa?           @relation(fields: [empresaId], references: [id])
+  rol               Rol                @relation(fields: [rolId], references: [id])
+  ventas            Venta[]
+  puntosVenta       PuntoVenta[]       @relation("PuntoVentaToUsuario")
+
   @@map("usuarios")
   @@schema("usuarios")
 }
 
-// =======================================
-// ESQUEMA: TURNOS
-// =======================================
-
 model Turno {
-  id              String    @id @default(cuid())
-  fechaInicio     DateTime
-  fechaFin        DateTime?
-  horaInicio      String    // "08:00", "14:00", etc.
-  horaFin         String?   // "14:00", "22:00", etc.
-  observaciones   String?
-  activo          Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  // Relaciones
-  usuarioId       String?
-  usuario         Usuario?  @relation(fields: [usuarioId], references: [id])
-  ventas          Venta[]
-  cierres         CierreTurno[]
-  historialLecturas HistorialLectura[]
-  
+  id                String             @id @default(cuid())
+  fechaInicio       DateTime
+  fechaFin          DateTime?
+  horaInicio        String
+  horaFin           String?
+  observaciones     String?
+  activo            Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  usuarioId         String?
+  puntoVentaId      String
+  cierres           CierreTurno[]
+  puntoVenta        PuntoVenta         @relation(fields: [puntoVentaId], references: [id])
+  usuario           Usuario?           @relation(fields: [usuarioId], references: [id])
+  ventas            Venta[]
+
   @@map("turnos")
   @@schema("turnos")
 }
 
 model CierreTurno {
-  id                    String    @id @default(cuid())
-  fechaCierre           DateTime  @default(now())
-  totalVentasLitros     Decimal   @db.Decimal(12, 2)
-  totalVentasGalones    Decimal   @db.Decimal(12, 2)
-  valorTotalGeneral     Decimal   @db.Decimal(12, 2)
-  productosActualizados Int       @default(0)
-  tanquesActualizados   Int       @default(0)
-  estado                String    // "exitoso", "con_errores", "fallido"
-  errores               String[]  // Array de errores si los hay
-  advertencias          String[]  // Array de advertencias
-  resumenSurtidores     Json      // JSON con el detalle completo del cierre
+  id                     String                    @id @default(cuid())
+  fechaCierre            DateTime                  @default(now())
+  totalVentasLitros      Decimal                   @db.Decimal(12, 2)
+  totalVentasGalones     Decimal                   @db.Decimal(12, 2)
+  valorTotalGeneral      Decimal                   @db.Decimal(12, 2)
+  // NUEVOS CAMPOS FINANCIEROS
+  totalDeclarado         Decimal                   @db.Decimal(12, 2) @default(0)
+  diferencia             Decimal                   @db.Decimal(12, 2) @default(0)
+  totalEfectivo          Decimal                   @db.Decimal(12, 2) @default(0)
+  totalTarjetas          Decimal                   @db.Decimal(12, 2) @default(0)
+  totalTransferencias    Decimal                   @db.Decimal(12, 2) @default(0)
+  totalOtros             Decimal                   @db.Decimal(12, 2) @default(0)
+  observacionesFinancieras String?
+  productosActualizados  Int                       @default(0)
+  tanquesActualizados    Int                       @default(0)
+  estado                 String
+  errores                String[]
+  advertencias           String[]
+  resumenSurtidores      Json
   observacionesGenerales String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  
-  // Relaciones
-  turnoId               String
-  turno                 Turno     @relation(fields: [turnoId], references: [id])
-  usuarioId             String    // Usuario que realizó el cierre
-  usuario               Usuario   @relation(fields: [usuarioId], references: [id])
-  historialLecturas     HistorialLectura[]
-  
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  turnoId                String
+  usuarioId              String
+  turno                  Turno                     @relation(fields: [turnoId], references: [id])
+  usuario                Usuario                   @relation(fields: [usuarioId], references: [id])
+  // RELACIÓN CON MÉTODOS DE PAGO
+  metodosPago            CierreTurnoMetodoPago[]
+
   @@map("cierres_turno")
   @@schema("turnos")
 }
 
-// =======================================
-// ESQUEMA: CLIENTES
-// =======================================
+model CierreTurnoMetodoPago {
+  id              String      @id @default(cuid())
+  metodoPago      String      // EFECTIVO, TARJETA_CREDITO, TARJETA_DEBITO, etc.
+  monto           Decimal     @db.Decimal(12, 2)
+  porcentaje      Decimal     @db.Decimal(5, 2)
+  observaciones   String?
+  createdAt       DateTime    @default(now())
+  cierreTurnoId   String
+  cierreTurno     CierreTurno @relation(fields: [cierreTurnoId], references: [id], onDelete: Cascade)
+
+  @@map("cierre_turno_metodos_pago")
+  @@schema("turnos")
+}
 
 model Cliente {
-  id                String    @id @default(cuid())
-  tipoDocumento     String    // "DNI", "RUC", "CE", etc.
-  numeroDocumento   String    @unique
-  nombre            String
-  apellido          String?   // Puede ser null para empresas
-  razonSocial       String?   // Para empresas
-  email             String?   @unique
-  telefono          String?
-  direccion         String?
-  activo            Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
-  // Relaciones
-  ventas            Venta[]
-  
+  id              String   @id @default(cuid())
+  tipoDocumento   String
+  numeroDocumento String   @unique
+  nombre          String
+  apellido        String?
+  razonSocial     String?
+  email           String?  @unique
+  telefono        String?
+  direccion       String?
+  activo          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  ventas          Venta[]
+
   @@map("clientes")
   @@schema("clientes")
 }
-
-// =======================================
-// ESQUEMA: INVENTARIO
-// =======================================
 
 model Categoria {
   id          String     @id @default(cuid())
@@ -147,231 +212,237 @@ model Categoria {
   activo      Boolean    @default(true)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-  
-  // Relaciones
   productos   Producto[]
-  
+
   @@map("categorias")
   @@schema("inventario")
 }
 
 model Producto {
-  id                String              @id @default(cuid())
-  codigo            String              @unique
-  nombre            String
-  descripcion       String?
-  unidadMedida      String              // "litros", "galones", "unidades"
-  precio            Decimal             @db.Decimal(10, 2)
-  stockMinimo        Int                @default(0)
-  stockActual        Int                @default(0)
-  esCombustible      Boolean            @default(false)
-  activo             Boolean            @default(true)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  
-  // Relaciones
+  id                 String              @id @default(cuid())
+  codigo             String              @unique
+  nombre             String
+  descripcion        String?
+  unidadMedida       String
+  precioCompra       Decimal             @db.Decimal(10, 2)
+  precioVenta        Decimal             @db.Decimal(10, 2)
+  moneda             String              @default("COP") // Código ISO de moneda (COP = Peso Colombiano)
+  stockMinimo        Int                 @default(0)
+  stockActual        Int                 @default(0)
+  esCombustible      Boolean             @default(false)
+  activo             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   categoriaId        String
-  categoria          Categoria            @relation(fields: [categoriaId], references: [id])
-  entradasInventario  EntradaInventario[]
-  detallesVentas      DetalleVenta[]
-  tanques             Tanque[]
-  mangueras           MangueraSurtidor[]
-  
+  entradasInventario EntradaInventario[]
+  mangueras          MangueraSurtidor[]
+  categoria          Categoria           @relation(fields: [categoriaId], references: [id])
+  tanques            Tanque[]
+  detallesVentas     DetalleVenta[]
+
   @@map("productos")
   @@schema("inventario")
 }
 
 model Tanque {
-  id                String              @id @default(cuid())
-  numero            String              @unique
-  capacidadTotal    Decimal             @db.Decimal(10, 2)
-  nivelActual       Decimal             @db.Decimal(10, 2) @default(0)
-  nivelMinimo        Decimal            @db.Decimal(10, 2) @default(0)
-  activo            Boolean             @default(true)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  
-  // Relaciones
-  productoId        String
-  producto          Producto            @relation(fields: [productoId], references: [id])
+  id                 String              @id @default(cuid())
+  numero             String
+  capacidadTotal     Decimal             @db.Decimal(10, 2)
+  nivelActual        Decimal             @default(0) @db.Decimal(10, 2)
+  nivelMinimo        Decimal             @default(0) @db.Decimal(10, 2)
+  diametro           Decimal?            @db.Decimal(8, 3) // En metros
+  alturaMaxima       Decimal?            @db.Decimal(8, 3) // En metros  
+  tipoTanque         String?             // Cilíndrico, rectangular, etc.
+  activo             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  productoId         String
+  puntoVentaId       String
   entradasInventario EntradaInventario[]
-  
+  tablaAforo         TablaAforo[]
+  producto           Producto            @relation(fields: [productoId], references: [id])
+  puntoVenta         PuntoVenta          @relation(fields: [puntoVentaId], references: [id])
+
+  @@unique([puntoVentaId, numero])
   @@map("tanques")
   @@schema("inventario")
 }
 
+model TablaAforo {
+  id         String  @id @default(cuid())
+  altura     Decimal @db.Decimal(8, 3) // Altura en centímetros
+  volumen    Decimal @db.Decimal(12, 2) // Volumen en litros
+  tanqueId   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tanque     Tanque  @relation(fields: [tanqueId], references: [id], onDelete: Cascade)
+
+  @@unique([tanqueId, altura])
+  @@map("tabla_aforo")
+  @@schema("inventario")
+}
+
 model Surtidor {
-  id              String          @id @default(cuid())
-  numero          String          @unique
-  nombre          String
-  descripcion     String?
-  ubicacion       String?         // Ubicación física del surtidor
-  cantidadMangueras Int             @default(1)
-  activo          Boolean           @default(true)
-  fechaInstalacion DateTime?
+  id                 String             @id @default(cuid())
+  numero             String
+  nombre             String
+  descripcion        String?
+  ubicacion          String?
+  cantidadMangueras  Int                @default(1)
+  activo             Boolean            @default(true)
+  fechaInstalacion   DateTime?
   fechaMantenimiento DateTime?
-  observaciones   String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
-  // Relaciones
-  mangueras       MangueraSurtidor[]
-  
+  observaciones      String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  puntoVentaId       String
+  mangueras          MangueraSurtidor[]
+  puntoVenta         PuntoVenta         @relation(fields: [puntoVentaId], references: [id])
+
+  @@unique([puntoVentaId, numero])
   @@map("surtidores")
   @@schema("inventario")
 }
 
 model MangueraSurtidor {
-  id            String    @id @default(cuid())
-  numero        String    // Número de la manguera (ej: "M1", "M2")
-  color         String?   // Color identificativo de la manguera
-  lecturaAnterior Decimal @db.Decimal(12, 3) @default(0) // Lectura anterior del contador
-  lecturaActual   Decimal @db.Decimal(12, 3) @default(0) // Lectura actual del contador
-  activo        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // Relaciones
-  surtidorId    String
-  surtidor      Surtidor  @relation(fields: [surtidorId], references: [id], onDelete: Cascade)
-  productoId    String
-  producto      Producto  @relation(fields: [productoId], references: [id])
+  id                String             @id @default(cuid())
+  numero            String
+  color             String?
+  lecturaAnterior   Decimal            @default(0) @db.Decimal(12, 3)
+  lecturaActual     Decimal            @default(0) @db.Decimal(12, 3)
+  activo            Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  surtidorId        String
+  productoId        String
   historialLecturas HistorialLectura[]
-  
+  producto          Producto           @relation(fields: [productoId], references: [id])
+  surtidor          Surtidor           @relation(fields: [surtidorId], references: [id], onDelete: Cascade)
+
   @@unique([surtidorId, numero])
   @@map("mangueras_surtidor")
   @@schema("inventario")
 }
 
 model HistorialLectura {
-  id                String    @id @default(cuid())
-  fechaLectura      DateTime  @default(now())
-  lecturaAnterior   Decimal   @db.Decimal(12, 3)
-  lecturaActual     Decimal   @db.Decimal(12, 3)
-  cantidadVendida   Decimal   @db.Decimal(12, 3) // lecturaActual - lecturaAnterior
-  valorVenta        Decimal   @db.Decimal(12, 2) // cantidadVendida * precio
-  tipoOperacion     String    // "cierre_turno", "ajuste_manual", "calibracion"
-  observaciones     String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
-  // Relaciones
-  mangueraId        String
-  manguera          MangueraSurtidor @relation(fields: [mangueraId], references: [id], onDelete: Cascade)
-  usuarioId         String?   // Usuario que realizó la operación
-  usuario           Usuario?  @relation(fields: [usuarioId], references: [id])
-  turnoId           String?   // Turno asociado (si aplica)
-  turno             Turno?    @relation(fields: [turnoId], references: [id])
-  cierreTurnoId     String?   // Cierre de turno asociado (si aplica)
-  cierreTurno       CierreTurno? @relation(fields: [cierreTurnoId], references: [id])
-  
+  id              String           @id @default(cuid())
+  fechaLectura    DateTime         @default(now())
+  lecturaAnterior Decimal          @db.Decimal(12, 3)
+  lecturaActual   Decimal          @db.Decimal(12, 3)
+  cantidadVendida Decimal          @db.Decimal(12, 3)
+  valorVenta      Decimal          @db.Decimal(12, 2)
+  tipoOperacion   String
+  observaciones   String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  mangueraId      String
+  usuarioId       String?
+  startTime       DateTime          
+  finishTime      DateTime
+  turnoId         String?
+  manguera        MangueraSurtidor @relation(fields: [mangueraId], references: [id], onDelete: Cascade)
+  usuario         Usuario?         @relation(fields: [usuarioId], references: [id])
+
   @@map("historial_lecturas")
   @@schema("inventario")
 }
 
 model EntradaInventario {
-  id            String    @id @default(cuid())
-  cantidad      Decimal   @db.Decimal(10, 2)
+  id             String   @id @default(cuid())
+  cantidad       Decimal  @db.Decimal(10, 2)
   precioUnitario Decimal  @db.Decimal(10, 2)
-  precioTotal   Decimal   @db.Decimal(10, 2)
-  numeroFactura String?
-  observaciones String?
-  fechaEntrada  DateTime  @default(now())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // Relaciones
-  productoId    String
-  producto      Producto  @relation(fields: [productoId], references: [id])
-  tanqueId      String?   // Opcional, solo para combustibles
-  tanque        Tanque?   @relation(fields: [tanqueId], references: [id])
-  
+  precioTotal    Decimal  @db.Decimal(10, 2)
+  numeroFactura  String?
+  observaciones  String?
+  fechaEntrada   DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  productoId     String
+  tanqueId       String?
+  producto       Producto @relation(fields: [productoId], references: [id])
+  tanque         Tanque?  @relation(fields: [tanqueId], references: [id])
+
   @@map("entradas_inventario")
   @@schema("inventario")
 }
 
-// =======================================
-// ESQUEMA: VENTAS
-// =======================================
-
 model Venta {
-  id              String         @id @default(cuid())
-  numeroVenta     String         @unique
-  fechaVenta      DateTime       @default(now())
-  subtotal        Decimal        @db.Decimal(10, 2)
-  impuestos       Decimal        @db.Decimal(10, 2) @default(0)
-  descuentos      Decimal        @db.Decimal(10, 2) @default(0)
-  total           Decimal        @db.Decimal(10, 2)
-  metodoPago      String         // "efectivo", "tarjeta", "transferencia"
-  estado          String         @default("completada") // "pendiente", "completada", "cancelada"
-  observaciones   String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  
-  // Relaciones
-  clienteId       String?        // Opcional para ventas sin cliente registrado
-  cliente         Cliente?       @relation(fields: [clienteId], references: [id])
-  usuarioId       String         // Usuario que registra la venta
-  usuario         Usuario        @relation(fields: [usuarioId], references: [id])
-  turnoId         String         // Turno en el que se realizó la venta
-  turno           Turno          @relation(fields: [turnoId], references: [id])
-  detallesVentas  DetalleVenta[]
-  
+  id             String         @id @default(cuid())
+  numeroVenta    String
+  fechaVenta     DateTime       @default(now())
+  subtotal       Decimal        @db.Decimal(10, 2)
+  impuestos      Decimal        @default(0) @db.Decimal(10, 2)
+  descuentos     Decimal        @default(0) @db.Decimal(10, 2)
+  total          Decimal        @db.Decimal(10, 2)
+  metodoPago     String
+  estado         String         @default("completada")
+  observaciones  String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  clienteId      String?
+  usuarioId      String
+  turnoId        String
+  puntoVentaId   String
+  detallesVentas DetalleVenta[]
+  cliente        Cliente?       @relation(fields: [clienteId], references: [id])
+  puntoVenta     PuntoVenta     @relation(fields: [puntoVentaId], references: [id])
+  turno          Turno          @relation(fields: [turnoId], references: [id])
+  usuario        Usuario        @relation(fields: [usuarioId], references: [id])
+
+  @@unique([puntoVentaId, numeroVenta])
   @@map("ventas")
   @@schema("ventas")
 }
 
 model DetalleVenta {
-  id            String    @id @default(cuid())
-  cantidad      Decimal   @db.Decimal(10, 2)
+  id             String   @id @default(cuid())
+  cantidad       Decimal  @db.Decimal(10, 2)
   precioUnitario Decimal  @db.Decimal(10, 2)
-  descuento     Decimal   @db.Decimal(10, 2) @default(0)
-  subtotal      Decimal   @db.Decimal(10, 2)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // Relaciones
-  ventaId       String
-  venta         Venta     @relation(fields: [ventaId], references: [id], onDelete: Cascade)
-  productoId    String
-  producto      Producto  @relation(fields: [productoId], references: [id])
-  
+  descuento      Decimal  @default(0) @db.Decimal(10, 2)
+  subtotal       Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ventaId        String
+  productoId     String
+  producto       Producto @relation(fields: [productoId], references: [id])
+  venta          Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
   @@map("detalles_ventas")
   @@schema("ventas")
 }
 
-// =======================================
-// ESQUEMA: REPORTES (Vistas materializadas y tablas de agregación)
-// =======================================
-
 model VentaDiaria {
-  id              String    @id @default(cuid())
-  fecha           DateTime  @db.Date
-  totalVentas     Int
-  montoTotal      Decimal   @db.Decimal(12, 2)
-  totalCombustible Decimal  @db.Decimal(12, 2)
-  totalProductos  Decimal   @db.Decimal(12, 2)
-  ventasEfectivo  Decimal   @db.Decimal(12, 2)
-  ventasTarjeta   Decimal   @db.Decimal(12, 2)
-  ventasTransferencia Decimal @db.Decimal(12, 2)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  @@unique([fecha])
+  id                  String     @id @default(cuid())
+  fecha               DateTime   @db.Date
+  totalVentas         Int
+  montoTotal          Decimal    @db.Decimal(12, 2)
+  totalCombustible    Decimal    @db.Decimal(12, 2)
+  totalProductos      Decimal    @db.Decimal(12, 2)
+  ventasEfectivo      Decimal    @db.Decimal(12, 2)
+  ventasTarjeta       Decimal    @db.Decimal(12, 2)
+  ventasTransferencia Decimal    @db.Decimal(12, 2)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  puntoVentaId        String
+  puntoVenta          PuntoVenta @relation(fields: [puntoVentaId], references: [id])
+
+  @@unique([puntoVentaId, fecha])
   @@map("ventas_diarias")
   @@schema("reportes")
 }
 
 model InventarioActual {
-  id              String    @id @default(cuid())
-  productoId      String
-  stockActual     Int
-  valorInventario Decimal   @db.Decimal(12, 2)
-  fechaActualizacion DateTime @default(now())
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  @@unique([productoId])
+  id                 String     @id @default(cuid())
+  productoId         String
+  stockActual        Int
+  valorInventario    Decimal    @db.Decimal(12, 2)
+  fechaActualizacion DateTime   @default(now())
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  puntoVentaId       String
+  puntoVenta         PuntoVenta @relation(fields: [puntoVentaId], references: [id])
+
+  @@unique([puntoVentaId, productoId])
   @@map("inventario_actual")
   @@schema("reportes")
-} 
+}

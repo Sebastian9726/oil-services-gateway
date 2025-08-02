@@ -155,6 +155,7 @@ export class ShiftsResolver {
       endTime: createTurnoInput.horaFin,
       observations: createTurnoInput.observaciones,
       userId: createTurnoInput.usuarioId || currentUser?.id,
+      puntoVentaId: createTurnoInput.puntoVentaId,
       active: createTurnoInput.activo,
     });
   }

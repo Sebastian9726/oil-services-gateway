@@ -1,5 +1,6 @@
 import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 import { MangueraSurtidor } from './manguera-surtidor.entity';
+import { PointOfSale } from '../../point-of-sale/entities/point-of-sale.entity';
 
 @ObjectType()
 export class Surtidor {
@@ -41,6 +42,9 @@ export class Surtidor {
 
   @Field(() => [MangueraSurtidor])
   mangueras: MangueraSurtidor[];
+
+  @Field(() => PointOfSale)
+  puntoVenta: PointOfSale;
 }
 
 @ObjectType()

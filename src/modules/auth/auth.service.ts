@@ -36,7 +36,14 @@ export class AuthService {
     // Buscar usuario por email
     const user = await this.prisma.usuario.findUnique({
       where: { email },
-      include: { rol: true },
+      include: { 
+        rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
+      },
     });
 
     if (!user) {
@@ -88,6 +95,56 @@ export class AuthService {
           createdAt: user.rol.createdAt,
           updatedAt: user.rol.updatedAt,
         },
+        puntosVenta: user.puntosVenta.map(pv => ({
+          id: pv.id,
+          codigo: pv.codigo,
+          nombre: pv.nombre,
+          descripcion: pv.descripcion,
+          direccion: pv.direccion,
+          ciudad: pv.ciudad,
+          provincia: pv.provincia,
+          pais: pv.pais,
+          codigoPostal: pv.codigoPostal,
+          telefono: pv.telefono,
+          telefonoMovil: pv.telefonoMovil,
+          email: pv.email,
+          horarioApertura: pv.horarioApertura,
+          horarioCierre: pv.horarioCierre,
+          diasAtencion: pv.diasAtencion,
+          coordenadasGPS: pv.coordenadasGPS,
+          tipoEstacion: pv.tipoEstacion,
+          serviciosAdicionales: pv.serviciosAdicionales,
+          capacidadMaxima: pv.capacidadMaxima,
+          fechaApertura: pv.fechaApertura,
+          activo: pv.activo,
+          createdAt: pv.createdAt,
+          updatedAt: pv.updatedAt,
+          empresaId: pv.empresaId,
+          empresa: {
+            id: pv.empresa.id,
+            rut: pv.empresa.rut,
+            razonSocial: pv.empresa.razonSocial,
+            nombreComercial: pv.empresa.nombreComercial,
+            nombre: pv.empresa.nombre,
+            direccion: pv.empresa.direccion,
+            ciudad: pv.empresa.ciudad,
+            provincia: pv.empresa.provincia,
+            pais: pv.empresa.pais,
+            codigoPostal: pv.empresa.codigoPostal,
+            telefono: pv.empresa.telefono,
+            telefonoMovil: pv.empresa.telefonoMovil,
+            email: pv.empresa.email,
+            sitioWeb: pv.empresa.sitioWeb,
+            logo: pv.empresa.logo,
+            sector: pv.empresa.sector,
+            tipoEmpresa: pv.empresa.tipoEmpresa,
+            fechaConstitucion: pv.empresa.fechaConstitucion,
+            activo: pv.empresa.activo,
+            createdAt: pv.empresa.createdAt,
+            updatedAt: pv.empresa.updatedAt,
+            puntosVenta: [],
+          },
+        })),
       },
       tokenType: 'Bearer',
       expiresIn: '1d',
@@ -114,7 +171,14 @@ export class AuthService {
   async validateUserPayload(payload: any) {
     const user = await this.prisma.usuario.findUnique({
       where: { id: payload.sub },
-      include: { rol: true },
+      include: { 
+        rol: true,
+        puntosVenta: {
+          include: {
+            empresa: true
+          }
+        }
+      },
     });
 
     if (!user || !user.activo) {
@@ -144,6 +208,56 @@ export class AuthService {
         createdAt: user.rol.createdAt,
         updatedAt: user.rol.updatedAt,
       },
+      puntosVenta: user.puntosVenta.map(pv => ({
+        id: pv.id,
+        codigo: pv.codigo,
+        nombre: pv.nombre,
+        descripcion: pv.descripcion,
+        direccion: pv.direccion,
+        ciudad: pv.ciudad,
+        provincia: pv.provincia,
+        pais: pv.pais,
+        codigoPostal: pv.codigoPostal,
+        telefono: pv.telefono,
+        telefonoMovil: pv.telefonoMovil,
+        email: pv.email,
+        horarioApertura: pv.horarioApertura,
+        horarioCierre: pv.horarioCierre,
+        diasAtencion: pv.diasAtencion,
+        coordenadasGPS: pv.coordenadasGPS,
+        tipoEstacion: pv.tipoEstacion,
+        serviciosAdicionales: pv.serviciosAdicionales,
+        capacidadMaxima: pv.capacidadMaxima,
+        fechaApertura: pv.fechaApertura,
+        activo: pv.activo,
+        createdAt: pv.createdAt,
+        updatedAt: pv.updatedAt,
+        empresaId: pv.empresaId,
+        empresa: {
+          id: pv.empresa.id,
+          rut: pv.empresa.rut,
+          razonSocial: pv.empresa.razonSocial,
+          nombreComercial: pv.empresa.nombreComercial,
+          nombre: pv.empresa.nombre,
+          direccion: pv.empresa.direccion,
+          ciudad: pv.empresa.ciudad,
+          provincia: pv.empresa.provincia,
+          pais: pv.empresa.pais,
+          codigoPostal: pv.empresa.codigoPostal,
+          telefono: pv.empresa.telefono,
+          telefonoMovil: pv.empresa.telefonoMovil,
+          email: pv.empresa.email,
+          sitioWeb: pv.empresa.sitioWeb,
+          logo: pv.empresa.logo,
+          sector: pv.empresa.sector,
+          tipoEmpresa: pv.empresa.tipoEmpresa,
+          fechaConstitucion: pv.empresa.fechaConstitucion,
+          activo: pv.empresa.activo,
+          createdAt: pv.empresa.createdAt,
+          updatedAt: pv.empresa.updatedAt,
+          puntosVenta: [],
+        },
+      })),
     };
   }
 } 

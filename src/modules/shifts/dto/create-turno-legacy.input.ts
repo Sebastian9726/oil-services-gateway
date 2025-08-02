@@ -39,6 +39,11 @@ export class CreateTurnoInput {
   @IsNotEmpty()
   usuarioId: string;
 
+  @Field(() => ID)
+  @IsString()
+  @IsNotEmpty()
+  puntoVentaId: string;
+
   @Field({ defaultValue: true })
   @IsOptional()
   @IsBoolean()

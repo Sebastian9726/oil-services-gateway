@@ -94,6 +94,51 @@ export class DispenserSummary {
 }
 
 @ObjectType()
+export class MetodoPagoResumen {
+  @Field()
+  metodoPago: string;
+
+  @Field(() => Float)
+  monto: number;
+
+  @Field(() => Float)
+  porcentaje: number;
+
+  @Field({ nullable: true })
+  observaciones?: string;
+}
+
+@ObjectType()
+export class ResumenFinancieroTurno {
+  @Field(() => Float)
+  totalDeclarado: number;
+
+  @Field(() => Float)
+  totalCalculado: number;
+
+  @Field(() => Float)
+  diferencia: number;
+
+  @Field(() => [MetodoPagoResumen])
+  metodosPago: MetodoPagoResumen[];
+
+  @Field(() => Float)
+  totalEfectivo: number;
+
+  @Field(() => Float)
+  totalTarjetas: number;
+
+  @Field(() => Float)
+  totalTransferencias: number;
+
+  @Field(() => Float)
+  totalOtros: number;
+
+  @Field({ nullable: true })
+  observaciones?: string;
+}
+
+@ObjectType()
 export class InventoryUpdateResponse {
   @Field(() => [DispenserSummary])
   resumenSurtidores: DispenserSummary[];
@@ -106,6 +151,9 @@ export class InventoryUpdateResponse {
 
   @Field(() => Float)
   valorTotalGeneral: number;
+
+  @Field(() => ResumenFinancieroTurno, { nullable: true })
+  resumenFinanciero?: ResumenFinancieroTurno;
 
   @Field()
   fechaProceso: Date;

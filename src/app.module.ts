@@ -7,6 +7,8 @@ import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { PrismaModule } from './config/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { CompanyModule } from './modules/company/company.module';
+import { PointOfSaleModule } from './modules/point-of-sale/point-of-sale.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { ClientsModule } from './modules/clients/clients.module';
@@ -35,6 +37,8 @@ import { ReportsModule } from './modules/reports/reports.module';
     // Módulos de funcionalidad
     AuthModule,
     UsersModule,
+    CompanyModule,
+    PointOfSaleModule,
     InventoryModule,
     SalesModule,
     ClientsModule,

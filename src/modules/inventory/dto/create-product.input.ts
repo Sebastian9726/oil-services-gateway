@@ -1,5 +1,24 @@
 import { InputType, Field, Float, Int } from '@nestjs/graphql';
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, Min, IsIn, ValidateBy, ValidationOptions } from 'class-validator';
+
+// Validador personalizado para verificar que precio de venta > precio de compra
+function IsPrecioVentaMayorQueCompra(validationOptions?: ValidationOptions) {
+  return ValidateBy(
+    {
+      name: 'isPrecioVentaMayorQueCompra',
+      validator: {
+        validate(value: any, args: any) {
+          const precioCompra = args?.object?.precioCompra;
+          return typeof value === 'number' && typeof precioCompra === 'number' && value > precioCompra;
+        },
+        defaultMessage() {
+          return 'El precio de venta debe ser mayor al precio de compra';
+        },
+      },
+    },
+    validationOptions,
+  );
+}
 
 @InputType()
 export class CreateProductInput {
@@ -24,9 +43,21 @@ export class CreateProductInput {
   unidadMedida: string;
 
   @Field(() => Float)
-  @IsNumber({}, { message: 'El precio debe ser un número' })
-  @Min(0, { message: 'El precio debe ser mayor o igual a 0' })
-  precio: number;
+  @IsNumber({}, { message: 'El precio de compra debe ser un número' })
+  @Min(0, { message: 'El precio de compra debe ser mayor o igual a 0' })
+  precioCompra: number;
+
+  @Field(() => Float)
+  @IsNumber({}, { message: 'El precio de venta debe ser un número' })
+  @Min(0, { message: 'El precio de venta debe ser mayor o igual a 0' })
+  @IsPrecioVentaMayorQueCompra({ message: 'El precio de venta debe ser mayor al precio de compra' })
+  precioVenta: number;
+
+  @Field({ defaultValue: 'COP' })
+  @IsOptional()
+  @IsString({ message: 'La moneda debe ser una cadena' })
+  @IsIn(['COP', 'USD', 'EUR'], { message: 'La moneda debe ser COP, USD o EUR' })
+  moneda?: string = 'COP';
 
   @Field(() => Int, { defaultValue: 0 })
   @IsOptional()

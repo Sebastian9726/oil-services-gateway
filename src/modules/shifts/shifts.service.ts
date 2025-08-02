@@ -11,76 +11,51 @@ export class ShiftsService {
   // Helper method to format Shift
   private formatShift(shift: any): Shift {
     return {
-      ...shift,
+      id: shift.id,
       startDate: new Date(shift.fechaInicio),
       endDate: shift.fechaFin ? new Date(shift.fechaFin) : null,
       startTime: shift.horaInicio,
       endTime: shift.horaFin,
       observations: shift.observaciones,
       active: shift.activo,
+      createdAt: shift.createdAt,
+      updatedAt: shift.updatedAt,
       userId: shift.usuarioId,
       user: shift.usuario,
+      puntoVentaId: shift.puntoVentaId,
+      puntoVenta: shift.puntoVenta,
     } as Shift;
   }
 
   async create(createShiftInput: CreateShiftInput): Promise<Shift> {
-    try {
-      // Verify that the user exists only if userId is provided
-      if (createShiftInput.userId) {
-        const user = await this.prisma.usuario.findUnique({
-          where: { id: createShiftInput.userId },
-        });
-
-        if (!user) {
-          throw new NotFoundException('User not found');
-        }
-
-        // Verify if there are overlapping active shifts for the same user
-        const existingShifts = await this.prisma.turno.findMany({
-          where: {
-            usuarioId: createShiftInput.userId,
-            activo: true,
-            OR: [
-              {
-                fechaFin: null, // Shifts without end date (active)
-              },
-              {
-                AND: [
-                  { fechaInicio: { lte: new Date(createShiftInput.startDate) } },
-                  { fechaFin: { gte: new Date(createShiftInput.startDate) } },
-                ],
-              },
-            ],
-          },
-        });
-
-        if (existingShifts.length > 0) {
-          throw new ConflictException('User already has an active shift in that period');
-        }
-      }
-
-      const shift = await this.prisma.turno.create({
-        data: {
-          fechaInicio: new Date(createShiftInput.startDate),
-          fechaFin: createShiftInput.endDate ? new Date(createShiftInput.endDate) : null,
-          horaInicio: createShiftInput.startTime,
-          horaFin: createShiftInput.endTime,
-          observaciones: createShiftInput.observations,
-          usuarioId: createShiftInput.userId || null,
-          activo: createShiftInput.active ?? true,
+    const shift = await this.prisma.turno.create({
+      data: {
+        fechaInicio: new Date(createShiftInput.startDate),
+        fechaFin: createShiftInput.endDate ? new Date(createShiftInput.endDate) : null,
+        horaInicio: createShiftInput.startTime,
+        horaFin: createShiftInput.endTime,
+        observaciones: createShiftInput.observations,
+        activo: createShiftInput.active ?? true,
+        puntoVenta: {
+          connect: { id: createShiftInput.puntoVentaId }
         },
-        include: {
-          usuario: true,
+        ...(createShiftInput.userId && {
+          usuario: {
+            connect: { id: createShiftInput.userId }
+          }
+        }),
+      },
+      include: {
+        puntoVenta: true,
+        usuario: {
+          include: {
+            rol: true,
+          }
         },
-      });
+      },
+    });
 
-      return this.formatShift(shift);
-    } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
-        throw error;
-      }
-      throw new Error(`Error creating shift: ${error.message}`);
-    }
+    return this.formatShift(shift);
   }
 
   async findAll(filters?: {

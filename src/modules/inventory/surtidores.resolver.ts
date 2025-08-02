@@ -47,8 +47,11 @@ export class SurtidoresResolver {
   @Query(() => Surtidor, { name: 'surtidorByNumber', nullable: true })
   @UseGuards(RolesGuard)
   @Roles('admin', 'manager', 'employee')
-  async findSurtidorByNumber(@Args('numero') numero: string): Promise<Surtidor | null> {
-    return this.surtidoresService.findByNumero(numero);
+  async findSurtidorByNumber(
+    @Args('numero') numero: string,
+    @Args('puntoVentaId') puntoVentaId: string
+  ): Promise<Surtidor | null> {
+    return this.surtidoresService.findByNumero(numero, puntoVentaId);
   }
 
   @Mutation(() => Surtidor)
@@ -232,13 +235,14 @@ export class SurtidoresResolver {
   @Roles('admin', 'manager', 'employee')
   async getSurtidorSalesSummary(
     @Args('numeroSurtidor') numeroSurtidor: string,
+    @Args('puntoVentaId') puntoVentaId: string,
     @Args('fechaDesde', { nullable: true }) fechaDesde?: Date,
     @Args('fechaHasta', { nullable: true }) fechaHasta?: Date,
   ): Promise<SurtidorSalesSummary> {
     const LITROS_TO_GALONES = 0.264172;
 
     // Obtener todas las mangueras del surtidor
-    const surtidor = await this.surtidoresService.findByNumero(numeroSurtidor);
+    const surtidor = await this.surtidoresService.findByNumero(numeroSurtidor, puntoVentaId);
     if (!surtidor) {
       throw new Error(`Surtidor ${numeroSurtidor} no encontrado`);
     }

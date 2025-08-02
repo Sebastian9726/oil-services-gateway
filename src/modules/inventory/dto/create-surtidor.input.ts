@@ -83,6 +83,11 @@ export class CreateSurtidorInput {
   @IsString()
   observaciones?: string;
 
+  @Field()
+  @IsString()
+  @IsNotEmpty()
+  puntoVentaId: string;
+
   @Field(() => [CreateMangueraInput])
   @IsArray()
   @ValidateNested({ each: true })

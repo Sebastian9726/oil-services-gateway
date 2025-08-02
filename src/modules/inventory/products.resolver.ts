@@ -29,6 +29,7 @@ import {
 import { SimpleStockUpdateInput } from './dto/simple-stock-update.input';
 import { CreateProductInput } from './dto/create-product.input';
 import { UpdateProductInput } from './dto/update-product.input';
+import { PrismaService } from '../../config/prisma/prisma.service';
 
 @Resolver(() => Producto)
 @UseGuards(JwtAuthGuard)
@@ -36,6 +37,7 @@ export class ProductsResolver {
   constructor(
     private readonly productsService: ProductsService,
     private readonly surtidoresService: SurtidoresService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Mutation(() => Producto)
@@ -112,6 +114,7 @@ export class ProductsResolver {
     
     return products.map(product => ({
       ...product,
+      precioVenta: Number(product.precioVenta),
       stockEnLitros: {
         cantidad: product.stockActual,
         unidad: 'litros',
@@ -122,8 +125,8 @@ export class ProductsResolver {
         unidad: 'galones',
         formatted: `${Math.round(product.stockActual * LITERS_TO_GALLONS * 100) / 100} galones`
       } as StockConversion,
-      precioLitro: product.precio,
-      precioGalon: Math.round(product.precio / LITERS_TO_GALLONS * 100) / 100
+      precioLitro: Number(product.precioVenta),
+      precioGalon: Math.round(Number(product.precioVenta) / LITERS_TO_GALLONS * 100) / 100
     }));
   }
 
@@ -149,8 +152,8 @@ export class ProductsResolver {
         unidad: 'galones',
         formatted: `${Math.round(product.stockActual * LITERS_TO_GALLONS * 100) / 100} galones`
       } as StockConversion,
-      precioLitro: product.precio,
-      precioGalon: Math.round(product.precio / LITERS_TO_GALLONS * 100) / 100,
+      precioLitro: Number(product.precioVenta),
+      precioGalon: Math.round(Number(product.precioVenta) / LITERS_TO_GALLONS * 100) / 100,
       equivalencias: {
         litro_a_galones: "0.264172 galones",
         galon_a_litros: "3.78541 litros"
@@ -226,8 +229,8 @@ export class ProductsResolver {
         unidad: 'galones',
         formatted: `${Math.round(product.stockActual * LITERS_TO_GALLONS * 100) / 100} galones`
       } as StockConversion,
-      precioLitro: product.precio,
-      precioGalon: Math.round(product.precio / LITERS_TO_GALLONS * 100) / 100
+      precioLitro: Number(product.precioVenta),
+      precioGalon: Math.round(Number(product.precioVenta) / LITERS_TO_GALLONS * 100) / 100
     }));
 
     // Calcular totales
@@ -235,7 +238,7 @@ export class ProductsResolver {
     const totalGalones = Math.round(totalLitros * LITERS_TO_GALLONS * 100) / 100;
     
     const valorTotalLitros = products.reduce((sum, product) => 
-      sum + (product.stockActual * product.precio), 0
+      sum + (product.stockActual * Number(product.precioVenta)), 0
     );
     const valorTotalGalones = Math.round(valorTotalLitros / LITERS_TO_GALLONS * 100) / 100;
 
@@ -302,31 +305,16 @@ export class ProductsResolver {
     let valorTotalGeneral = 0;
 
     try {
-      // Validar que el turno existe antes de procesar
-      const turnoExists = await this.productsService.validateTurnoExists(cierreTurnoInput.turnoId);
-      if (!turnoExists) {
-        return {
-          resumenSurtidores: [],
-          totalGeneralLitros: 0,
-          totalGeneralGalones: 0,
-          valorTotalGeneral: 0,
-          fechaProceso: new Date(),
-          turnoId: cierreTurnoInput.turnoId,
-          productosActualizados: 0,
-          estado: 'fallido',
-          errores: [`Turno no encontrado o inválido: ${cierreTurnoInput.turnoId}`]
-        };
-      }
-
-      // Validar que todos los surtidores existen antes de procesar
       for (const surtidor of cierreTurnoInput.lecturasSurtidores) {
-        const surtidorExists = await this.surtidoresService.validateSurtidorExists(surtidor.numeroSurtidor);
+        console.log(`[CIERRE_TURNO] Validando surtidor: ${surtidor.numeroSurtidor} para punto de venta: ${cierreTurnoInput.puntoVentaId}`);
+        
+        const surtidorExists = await this.surtidoresService.validateSurtidorExists(surtidor.numeroSurtidor, cierreTurnoInput.puntoVentaId);
         if (!surtidorExists) {
-          errores.push(`Surtidor no registrado o inactivo: ${surtidor.numeroSurtidor}`);
+          errores.push(`Surtidor ${surtidor.numeroSurtidor} no encontrado o no pertenece al punto de venta ${cierreTurnoInput.puntoVentaId}`);
           continue;
         }
 
-        // Validar cada manguera del surtidor
+        // Validar cada manguera del surtidor con el punto de venta específico
         for (const manguera of surtidor.mangueras) {
           const mangueraExists = await this.surtidoresService.validateMangueraExists(
             surtidor.numeroSurtidor,
@@ -334,32 +322,38 @@ export class ProductsResolver {
             manguera.codigoProducto
           );
           if (!mangueraExists) {
-            errores.push(`Manguera ${manguera.numeroManguera} no válida para surtidor ${surtidor.numeroSurtidor} o producto ${manguera.codigoProducto}`);
+            errores.push(`Manguera ${manguera.numeroManguera} no válida para surtidor ${surtidor.numeroSurtidor} en punto de venta ${cierreTurnoInput.puntoVentaId}`);
           }
         }
       }
 
-      // Si hay errores de validación de surtidores, retornar inmediatamente
+      // Si hay errores de validación, retornar inmediatamente
       if (errores.length > 0) {
+        const resumenFinancieroVacio = this.crearResumenFinancieroVacio();
         return {
           resumenSurtidores: [],
           totalGeneralLitros: 0,
           totalGeneralGalones: 0,
           valorTotalGeneral: 0,
+          resumenFinanciero: resumenFinancieroVacio,
           fechaProceso: new Date(),
-          turnoId: cierreTurnoInput.turnoId,
+          turnoId: cierreTurnoInput.puntoVentaId,
           productosActualizados: 0,
           estado: 'fallido',
           errores: errores
         };
       }
 
-      // Procesar cada surtidor
+      console.log(`[CIERRE_TURNO] Validación exitosa. Procesando ${cierreTurnoInput.lecturasSurtidores.length} surtidores`);
+
+      // 3. PROCESAR CADA SURTIDOR (ya validado que pertenece al punto de venta)
       for (const surtidor of cierreTurnoInput.lecturasSurtidores) {
         const ventasCalculadas = [];
         let totalSurtidorLitros = 0;
         let totalSurtidorGalones = 0;
         let valorTotalSurtidor = 0;
+
+        console.log(`[CIERRE_TURNO] Procesando surtidor: ${surtidor.numeroSurtidor} con ${surtidor.mangueras.length} mangueras`);
 
         // Procesar cada manguera del surtidor
         for (const manguera of surtidor.mangueras) {
@@ -371,7 +365,7 @@ export class ProductsResolver {
               continue;
             }
 
-            console.log(`[DEBUG] Producto encontrado: ${product.codigo}, Stock actual: ${product.stockActual}`);
+            console.log(`[CIERRE_TURNO] Producto encontrado: ${product.codigo} - Stock actual: ${product.stockActual}L`);
 
             // Calcular cantidad vendida
             const cantidadVendida = manguera.lecturaActual - manguera.lecturaAnterior;
@@ -402,76 +396,74 @@ export class ProductsResolver {
             cantidadLitros = Math.round(cantidadLitros * 100) / 100;
             cantidadGalones = Math.round(cantidadGalones * 100) / 100;
 
-            console.log(`[DEBUG] Cantidad a descontar: ${cantidadLitros} litros (${cantidadVendida} ${manguera.unidadMedida})`);
-            console.log(`[DEBUG] Stock disponible: ${product.stockActual} litros`);
+            console.log(`[CIERRE_TURNO] Cantidad a descontar: ${cantidadLitros}L (${cantidadVendida} ${manguera.unidadMedida})`);
             
             // Calcular precios
-            const precioLitro = product.precio;
+            const precioLitro = Number(product.precioVenta);
             const precioGalon = Math.round(precioLitro / LITROS_TO_GALONES * 100) / 100;
             const valorVenta = cantidadLitros * precioLitro;
 
-            // PRIMERO: Actualizar lecturas de la manguera SIEMPRE (independiente del stock)
-            console.log(`[DEBUG] Actualizando lecturas: surtidor=${surtidor.numeroSurtidor}, manguera=${manguera.numeroManguera}, nuevaLectura=${manguera.lecturaActual}`);
+            // ACTUALIZAR LECTURAS DE LA MANGUERA SIEMPRE
+            console.log(`[CIERRE_TURNO] Actualizando lecturas: surtidor=${surtidor.numeroSurtidor}, manguera=${manguera.numeroManguera}`);
             
             try {
               const lecturaActualizada = await this.surtidoresService.updateMangueraReadingsWithHistory(
                 surtidor.numeroSurtidor,
                 manguera.numeroManguera,
-                manguera.lecturaActual, // La nueva lectura del cierre
+                manguera.lecturaActual,
                 precioLitro,
                 'cierre_turno',
                 user.id,
-                cierreTurnoInput.turnoId,
-                undefined, // cierreTurnoId se asignará después
-                `Cierre de turno - Cantidad vendida: ${cantidadLitros} litros`
+                cierreTurnoInput.startTime,
+                cierreTurnoInput.finishTime,
+                `Cierre de turno ${cierreTurnoInput.puntoVentaId} - Cantidad vendida: ${cantidadLitros}L`
               );
-              
-              console.log(`[DEBUG] Resultado actualización lecturas:`, lecturaActualizada);
               
               if (!lecturaActualizada.success) {
                 advertencias.push(`No se pudo actualizar lecturas para surtidor ${surtidor.numeroSurtidor}, manguera ${manguera.numeroManguera}`);
               } else {
-                console.log(`[DEBUG] Lecturas actualizadas exitosamente - Cantidad vendida calculada: ${lecturaActualizada.cantidadVendida}L`);
-                // Verificar que los cálculos coincidan
-                const diferencia = Math.abs(cantidadLitros - lecturaActualizada.cantidadVendida);
-                if (diferencia > 0.01) { // Tolerancia de 0.01 litros
-                  advertencias.push(`Diferencia en cálculos para surtidor ${surtidor.numeroSurtidor}, manguera ${manguera.numeroManguera}: esperado ${cantidadLitros}L, calculado ${lecturaActualizada.cantidadVendida}L`);
-                }
+                console.log(`[CIERRE_TURNO] Lecturas actualizadas - Cantidad vendida: ${lecturaActualizada.cantidadVendida}L`);
               }
             } catch (lecturaError) {
-              console.error(`[ERROR] Actualizando lecturas:`, lecturaError);
+              console.error(`[CIERRE_TURNO] Error actualizando lecturas:`, lecturaError);
               advertencias.push(`Error actualizando lecturas en surtidor ${surtidor.numeroSurtidor}, manguera ${manguera.numeroManguera}: ${lecturaError.message}`);
             }
 
-            // SEGUNDO: Verificar stock y actualizar inventario solo si hay suficiente
+            // VERIFICAR STOCK Y ACTUALIZAR INVENTARIO
             let stockActualizado = false;
             if (cantidadLitros > product.stockActual) {
               errores.push(`Stock insuficiente para ${manguera.codigoProducto} en surtidor ${surtidor.numeroSurtidor}: necesario ${cantidadLitros}L, disponible ${product.stockActual}L`);
             } else {
               try {
-                // Actualizar stock del producto (restar del inventario)
                 await this.productsService.updateStock(product.id, cantidadLitros, 'salida');
                 productosActualizados++;
                 stockActualizado = true;
-                console.log(`[DEBUG] Stock actualizado exitosamente para ${product.codigo}`);
+                console.log(`[CIERRE_TURNO] Stock actualizado para ${product.codigo}: -${cantidadLitros}L`);
               } catch (stockError) {
                 errores.push(`Error actualizando stock de ${manguera.codigoProducto}: ${stockError.message}`);
               }
             }
 
-            // TERCERO: Actualizar tanque físico solo si se actualizó el stock
+            // ACTUALIZAR TANQUE DEL PUNTO DE VENTA ESPECÍFICO
             if (stockActualizado && product.esCombustible) {
               try {
-                const tanqueActualizado = await this.productsService.updateTankLevel(product.id, cantidadLitros, 'salida');
+                // Buscar tanque específico del punto de venta para este producto
+                const tanqueActualizado = await this.productsService.updateTankLevelForPointOfSale(
+                  product.id, 
+                  cierreTurnoInput.puntoVentaId, 
+                  cantidadLitros, 
+                  'salida'
+                );
                 if (tanqueActualizado) {
                   tanquesActualizados++;
+                  console.log(`[CIERRE_TURNO] Tanque actualizado para producto ${product.codigo} en punto de venta ${cierreTurnoInput.puntoVentaId}`);
                 }
               } catch (tankError) {
-                advertencias.push(`No se pudo actualizar tanque para producto ${manguera.codigoProducto}: ${tankError.message}`);
+                advertencias.push(`No se pudo actualizar tanque para producto ${manguera.codigoProducto} en punto de venta ${cierreTurnoInput.puntoVentaId}: ${tankError.message}`);
               }
             }
 
-            // CUARTO: Agregar a resumen siempre (aunque no se haya actualizado stock)
+            // Agregar a resumen
             ventasCalculadas.push({
               codigoProducto: manguera.codigoProducto,
               nombreProducto: product.nombre,
@@ -508,47 +500,106 @@ export class ProductsResolver {
 
       const estado = errores.length > 0 ? 'con_errores' : 'exitoso';
 
-      // Guardar trazabilidad en la base de datos
-      try {
-        await this.productsService.saveShiftClosure({
-          turnoId: cierreTurnoInput.turnoId,
-          usuarioId: user.id,
-          totalVentasLitros: Math.round(totalGeneralLitros * 100) / 100,
-          totalVentasGalones: Math.round(totalGeneralGalones * 100) / 100,
-          valorTotalGeneral: Math.round(valorTotalGeneral * 100) / 100,
-          productosActualizados,
-          tanquesActualizados,
-          estado,
-          errores: errores.length > 0 ? errores : undefined,
-          advertencias: advertencias.length > 0 ? [...advertencias, `Tanques actualizados: ${tanquesActualizados}`] : [`Tanques actualizados: ${tanquesActualizados}`],
-          resumenSurtidores,
-          observacionesGenerales: cierreTurnoInput.observacionesGenerales
+      console.log(`[CIERRE_TURNO] Procesamiento completado:`, {
+        puntoVenta: cierreTurnoInput.puntoVentaId,
+        totalLitros: totalGeneralLitros,
+        totalGalones: totalGeneralGalones,
+        valorTotal: valorTotalGeneral,
+        productosActualizados,
+        tanquesActualizados,
+        estado
+      });
+
+      // VALIDAR Y PROCESAR MÉTODOS DE PAGO
+      const resumenFinanciero = this.procesarMetodosPagoTurno(
+        cierreTurnoInput.resumenVentas,
+        valorTotalGeneral,
+        errores,
+        advertencias
+      );
+
+      // GUARDAR EN BASE DE DATOS - OPERACIÓN TRANSACCIONAL
+      const cierreTurnoGuardado = await this.prisma.$transaction(async (prisma) => {
+        // Crear o encontrar un turno para este punto de venta
+        let turno = await prisma.turno.findFirst({
+          where: {
+            puntoVentaId: cierreTurnoInput.puntoVentaId,
+            activo: true
+          },
+          orderBy: { fechaInicio: 'desc' }
         });
-      } catch (saveError) {
-        advertencias.push(`Advertencia: No se pudo guardar la trazabilidad del cierre: ${saveError.message}`);
-      }
+
+        // Si no existe un turno, crear uno temporal
+        if (!turno) {
+          turno = await prisma.turno.create({
+            data: {
+              fechaInicio: new Date(cierreTurnoInput.startTime),
+              fechaFin: new Date(cierreTurnoInput.finishTime),
+              horaInicio: new Date(cierreTurnoInput.startTime).toLocaleTimeString(),
+              horaFin: new Date(cierreTurnoInput.finishTime).toLocaleTimeString(),
+              observaciones: `Turno automático para cierre de ${cierreTurnoInput.puntoVentaId}`,
+              activo: true,
+              puntoVentaId: cierreTurnoInput.puntoVentaId,
+              usuarioId: user.id
+            }
+          });
+        }
+
+        // Crear el cierre de turno con la información financiera en el resumen
+        const resumenCompleto = {
+          surtidores: resumenSurtidores,
+          financiero: resumenFinanciero
+        };
+
+        const cierre = await prisma.cierreTurno.create({
+          data: {
+            turnoId: turno.id, // Usar el turno real
+            usuarioId: user.id,
+            fechaCierre: new Date(),
+            totalVentasLitros: totalGeneralLitros,
+            totalVentasGalones: totalGeneralGalones,
+            valorTotalGeneral: valorTotalGeneral,
+            productosActualizados,
+            tanquesActualizados,
+            estado,
+            errores: errores.length > 0 ? errores : [],
+            advertencias: advertencias.length > 0 ? advertencias : [],
+            resumenSurtidores: resumenCompleto,
+            observacionesGenerales: cierreTurnoInput.observacionesGenerales || 
+              `Total declarado: $${resumenFinanciero.totalDeclarado}, Diferencia: $${resumenFinanciero.diferencia}`
+          }
+        });
+
+        return cierre;
+      });
+
+      console.log(`[CIERRE_TURNO] Datos guardados en BD con ID: ${cierreTurnoGuardado.id}`);
 
       return {
         resumenSurtidores,
         totalGeneralLitros: Math.round(totalGeneralLitros * 100) / 100,
         totalGeneralGalones: Math.round(totalGeneralGalones * 100) / 100,
         valorTotalGeneral: Math.round(valorTotalGeneral * 100) / 100,
+        resumenFinanciero,
         fechaProceso: new Date(),
-        turnoId: cierreTurnoInput.turnoId,
+        turnoId: cierreTurnoGuardado.id, // Retornamos el ID del cierre creado
         productosActualizados,
         estado,
         errores: errores.length > 0 ? errores : undefined,
-        advertencias: advertencias.length > 0 ? [...advertencias, `Tanques actualizados: ${tanquesActualizados}`] : [`Tanques actualizados: ${tanquesActualizados}`]
+        advertencias: advertencias.length > 0 ? [...advertencias, `Punto de venta: ${cierreTurnoInput.puntoVentaId}`, `Tanques actualizados: ${tanquesActualizados}`, `Cierre guardado: ${cierreTurnoGuardado.id}`] : [`Punto de venta: ${cierreTurnoInput.puntoVentaId}`, `Tanques actualizados: ${tanquesActualizados}`, `Cierre guardado: ${cierreTurnoGuardado.id}`]
       };
 
     } catch (error) {
+      console.error('[CIERRE_TURNO] Error general:', error);
+      const resumenFinancieroVacio = this.crearResumenFinancieroVacio();
       return {
         resumenSurtidores: [],
         totalGeneralLitros: 0,
         totalGeneralGalones: 0,
         valorTotalGeneral: 0,
+        resumenFinanciero: resumenFinancieroVacio,
         fechaProceso: new Date(),
-        turnoId: cierreTurnoInput.turnoId,
+        turnoId: cierreTurnoInput.puntoVentaId,
         productosActualizados: 0,
         estado: 'fallido',
         errores: [`Error general: ${error.message}`]
@@ -662,9 +713,245 @@ export class ProductsResolver {
       stockActual: product.stockActual,
       stockMinimo: product.stockMinimo,
       unidadMedida: product.unidadMedida,
-      precio: product.precio,
+      precioVenta: Number(product.precioVenta),
       esCombustible: product.esCombustible,
       activo: product.activo
     });
+  }
+
+  @Query(() => String, { name: 'getCierreFinanciero' })
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager', 'employee')
+  async getCierreFinanciero(@Args('cierreId', { type: () => ID }) cierreId: string): Promise<string> {
+    const cierre = await this.prisma.cierreTurno.findUnique({
+      where: { id: cierreId },
+      include: {
+        usuario: true,
+        turno: {
+          include: {
+            puntoVenta: true
+          }
+        }
+      }
+    });
+
+    if (!cierre) {
+      throw new Error('Cierre de turno no encontrado');
+    }
+
+    // Extraer información financiera del JSON
+    const resumenCompleto = cierre.resumenSurtidores as any;
+    const resumenFinanciero = resumenCompleto?.financiero || {
+      totalDeclarado: 0,
+      totalCalculado: Number(cierre.valorTotalGeneral),
+      diferencia: 0 - Number(cierre.valorTotalGeneral),
+      metodosPago: [],
+      totalEfectivo: 0,
+      totalTarjetas: 0,
+      totalTransferencias: 0,
+      totalOtros: 0
+    };
+
+    const cierreDetallado = {
+      id: cierre.id,
+      fechaCierre: cierre.fechaCierre,
+      usuario: {
+        nombre: cierre.usuario.nombre,
+        apellido: cierre.usuario.apellido,
+        email: cierre.usuario.email
+      },
+      puntoVenta: cierre.turno?.puntoVenta?.nombre || 'No identificado',
+      
+      // RESUMEN FÍSICO
+      ventasFisicas: {
+        totalLitros: Number(cierre.totalVentasLitros),
+        totalGalones: Number(cierre.totalVentasGalones),
+        valorCalculado: Number(cierre.valorTotalGeneral)
+      },
+
+      // RESUMEN FINANCIERO
+      ventasFinancieras: {
+        totalDeclarado: resumenFinanciero.totalDeclarado,
+        totalCalculado: resumenFinanciero.totalCalculado,
+        diferencia: resumenFinanciero.diferencia,
+        metodosPago: resumenFinanciero.metodosPago,
+        desglosePorTipo: {
+          efectivo: resumenFinanciero.totalEfectivo,
+          tarjetas: resumenFinanciero.totalTarjetas,
+          transferencias: resumenFinanciero.totalTransferencias,
+          otros: resumenFinanciero.totalOtros
+        }
+      },
+
+      // ESTADÍSTICAS
+      estadisticas: {
+        productosActualizados: cierre.productosActualizados,
+        tanquesActualizados: cierre.tanquesActualizados,
+        estado: cierre.estado,
+        tieneErrores: cierre.errores.length > 0,
+        tieneAdvertencias: cierre.advertencias.length > 0
+      },
+
+      errores: cierre.errores,
+      advertencias: cierre.advertencias,
+      observaciones: cierre.observacionesGenerales
+    };
+
+    return JSON.stringify(cierreDetallado, null, 2);
+  }
+
+  @Query(() => String, { name: 'getCierresFinancierosHoy' })
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager', 'employee')
+  async getCierresFinancierosHoy(): Promise<string> {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const manana = new Date(hoy);
+    manana.setDate(manana.getDate() + 1);
+
+    const cierres = await this.prisma.cierreTurno.findMany({
+      where: {
+        fechaCierre: {
+          gte: hoy,
+          lt: manana
+        }
+      },
+      include: {
+        usuario: true,
+        turno: {
+          include: {
+            puntoVenta: true
+          }
+        }
+      },
+      orderBy: { fechaCierre: 'desc' }
+    });
+
+    const resumenDiario = {
+      fecha: hoy,
+      totalCierres: cierres.length,
+      resumenGeneral: {
+        totalVentasLitros: 0,
+        totalVentasGalones: 0,
+        valorTotalCalculado: 0,
+        totalDeclarado: 0,
+        diferenciaAcumulada: 0,
+        totalEfectivo: 0,
+        totalTarjetas: 0,
+        totalTransferencias: 0,
+        totalOtros: 0
+      },
+      cierres: cierres.map(cierre => {
+        const resumenCompleto = cierre.resumenSurtidores as any;
+        const resumenFinanciero = resumenCompleto?.financiero || {};
+
+        // Acumular totales
+        resumenDiario.resumenGeneral.totalVentasLitros += Number(cierre.totalVentasLitros);
+        resumenDiario.resumenGeneral.totalVentasGalones += Number(cierre.totalVentasGalones);
+        resumenDiario.resumenGeneral.valorTotalCalculado += Number(cierre.valorTotalGeneral);
+        resumenDiario.resumenGeneral.totalDeclarado += resumenFinanciero.totalDeclarado || 0;
+        resumenDiario.resumenGeneral.diferenciaAcumulada += resumenFinanciero.diferencia || 0;
+        resumenDiario.resumenGeneral.totalEfectivo += resumenFinanciero.totalEfectivo || 0;
+        resumenDiario.resumenGeneral.totalTarjetas += resumenFinanciero.totalTarjetas || 0;
+        resumenDiario.resumenGeneral.totalTransferencias += resumenFinanciero.totalTransferencias || 0;
+        resumenDiario.resumenGeneral.totalOtros += resumenFinanciero.totalOtros || 0;
+
+        return {
+          id: cierre.id,
+          fechaCierre: cierre.fechaCierre,
+          usuario: `${cierre.usuario.nombre} ${cierre.usuario.apellido}`,
+          puntoVenta: cierre.turno?.puntoVenta?.nombre || 'No identificado',
+          valorCalculado: Number(cierre.valorTotalGeneral),
+          totalDeclarado: resumenFinanciero.totalDeclarado || 0,
+          diferencia: resumenFinanciero.diferencia || 0,
+          estado: cierre.estado,
+          cantidadMetodosPago: resumenFinanciero.metodosPago?.length || 0
+        };
+      })
+    };
+
+    return JSON.stringify(resumenDiario, null, 2);
+  }
+
+  private crearResumenFinancieroVacio(): any {
+    return {
+      totalDeclarado: 0,
+      totalCalculado: 0,
+      diferencia: 0,
+      metodosPago: [],
+      totalEfectivo: 0,
+      totalTarjetas: 0,
+      totalTransferencias: 0,
+      totalOtros: 0,
+      observaciones: 'No se procesaron métodos de pago'
+    };
+  }
+
+  private procesarMetodosPagoTurno(
+    resumenVentas: any,
+    valorTotalGeneral: number,
+    errores: string[],
+    advertencias: string[]
+  ): any {
+    if (!resumenVentas || !resumenVentas.metodosPago || !Array.isArray(resumenVentas.metodosPago)) {
+      errores.push('Información de métodos de pago no válida');
+      return this.crearResumenFinancieroVacio();
+    }
+
+    const totalDeclarado = resumenVentas.totalVentasTurno || 0;
+    const totalCalculado = valorTotalGeneral;
+    const diferencia = totalDeclarado - totalCalculado;
+
+    // Validar que la suma de métodos de pago coincida con el total declarado
+    const sumaPagos = resumenVentas.metodosPago.reduce((sum: number, pago: any) => sum + pago.monto, 0);
+    if (Math.abs(sumaPagos - totalDeclarado) > 0.01) {
+      errores.push(`La suma de métodos de pago ($${sumaPagos}) no coincide con el total declarado ($${totalDeclarado})`);
+    }
+
+    // Calcular totales por método de pago
+    let totalEfectivo = 0;
+    let totalTarjetas = 0;
+    let totalTransferencias = 0;
+    let totalOtros = 0;
+
+    const metodosPagoResumen = resumenVentas.metodosPago.map((pago: any) => {
+      const monto = pago.monto || 0;
+      const porcentaje = totalDeclarado > 0 ? (monto / totalDeclarado) * 100 : 0;
+
+      // Clasificar por tipo de método de pago
+      switch (pago.metodoPago) {
+        case 'EFECTIVO':
+          totalEfectivo += monto;
+          break;
+        case 'TARJETA_CREDITO':
+        case 'TARJETA_DEBITO':
+          totalTarjetas += monto;
+          break;
+        case 'TRANSFERENCIA':
+          totalTransferencias += monto;
+          break;
+        default:
+          totalOtros += monto;
+      }
+
+      return {
+        metodoPago: pago.metodoPago,
+        monto: Math.round(monto * 100) / 100,
+        porcentaje: Math.round(porcentaje * 100) / 100,
+        observaciones: pago.observaciones
+      };
+    });
+
+    return {
+      totalDeclarado: Math.round(totalDeclarado * 100) / 100,
+      totalCalculado: Math.round(totalCalculado * 100) / 100,
+      diferencia: Math.round(diferencia * 100) / 100,
+      metodosPago: metodosPagoResumen,
+      totalEfectivo: Math.round(totalEfectivo * 100) / 100,
+      totalTarjetas: Math.round(totalTarjetas * 100) / 100,
+      totalTransferencias: Math.round(totalTransferencias * 100) / 100,
+      totalOtros: Math.round(totalOtros * 100) / 100,
+      observaciones: resumenVentas.observaciones
+    };
   }
 } 

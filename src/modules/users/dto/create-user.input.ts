@@ -1,5 +1,5 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsEmail, IsNotEmpty, MinLength, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, MinLength, IsOptional, IsString, IsArray } from 'class-validator';
 
 @InputType()
 export class CreateUserInput {
@@ -37,4 +37,10 @@ export class CreateUserInput {
   @IsNotEmpty({ message: 'El rol es requerido' })
   @IsString({ message: 'El rol debe ser una cadena' })
   rolId: string;
+
+  @Field(() => [String], { nullable: true })
+  @IsOptional()
+  @IsArray({ message: 'Los puntos de venta deben ser un array' })
+  @IsString({ each: true, message: 'Cada punto de venta debe ser una cadena' })
+  puntosVentaIds?: string[];
 } 

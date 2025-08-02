@@ -39,6 +39,11 @@ export class CreateShiftInput {
   @IsOptional()
   userId?: string;
 
+  @Field()
+  @IsString()
+  @IsNotEmpty()
+  puntoVentaId: string;
+
   @Field({ defaultValue: true })
   @IsOptional()
   @IsBoolean()

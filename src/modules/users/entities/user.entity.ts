@@ -1,5 +1,6 @@
 import { ObjectType, Field, ID, HideField } from '@nestjs/graphql';
 import { Rol } from './rol.entity';
+import { PointOfSale } from '../../point-of-sale/entities/point-of-sale.entity';
 
 @ObjectType()
 export class User {
@@ -45,4 +46,7 @@ export class User {
 
   @Field(() => Rol)
   rol: Rol;
+
+  @Field(() => [PointOfSale])
+  puntosVenta: PointOfSale[];
 } 

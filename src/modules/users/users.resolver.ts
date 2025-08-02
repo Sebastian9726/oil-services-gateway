@@ -103,4 +103,24 @@ export class UsersResolver {
   async usersByRole(@Args('roleName') roleName: string): Promise<User[]> {
     return this.usersService.findUsersByRole(roleName);
   }
+
+  @Mutation(() => User)
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async addPointOfSaleToUser(
+    @Args('userId', { type: () => ID }) userId: string,
+    @Args('pointOfSaleId', { type: () => ID }) pointOfSaleId: string,
+  ): Promise<User> {
+    return this.usersService.addPointOfSaleToUser(userId, pointOfSaleId);
+  }
+
+  @Mutation(() => User)
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async removePointOfSaleFromUser(
+    @Args('userId', { type: () => ID }) userId: string,
+    @Args('pointOfSaleId', { type: () => ID }) pointOfSaleId: string,
+  ): Promise<User> {
+    return this.usersService.removePointOfSaleFromUser(userId, pointOfSaleId);
+  }
 } 

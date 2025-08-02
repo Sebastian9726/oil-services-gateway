@@ -10,15 +10,21 @@ export class ProductsService {
 
   // Helper method to convert Prisma product to GraphQL entity
   private formatProduct(product: any): Producto {
-    const precio = parseFloat(product.precio?.toString() || '0');
-    const costo = parseFloat(product.costo?.toString() || '0');
+    const precioCompra = parseFloat(product.precioCompra?.toString() || '0');
+    const precioVenta = parseFloat(product.precioVenta?.toString() || '0');
+    
+    // Calcular métricas de rentabilidad
+    const utilidad = precioVenta - precioCompra;
+    const margenUtilidad = precioVenta > 0 ? (utilidad / precioVenta) * 100 : 0;
+    const porcentajeGanancia = precioCompra > 0 ? (utilidad / precioCompra) * 100 : 0;
     
     return {
       ...product,
-      precio: precio,
-      costo: costo,
-      utilidad: precio - costo,
-      margenUtilidad: precio > 0 ? ((precio - costo) / precio) * 100 : 0,
+      precioCompra: precioCompra,
+      precioVenta: precioVenta,
+      utilidad: utilidad,
+      margenUtilidad: Math.round(margenUtilidad * 100) / 100, // Redondear a 2 decimales
+      porcentajeGanancia: Math.round(porcentajeGanancia * 100) / 100, // Redondear a 2 decimales
     } as Producto;
   }
 
@@ -38,7 +44,19 @@ export class ProductsService {
     }
 
     const producto = await this.prisma.producto.create({
-      data: createProductInput,
+      data: {
+        codigo: createProductInput.codigo,
+        nombre: createProductInput.nombre,
+        descripcion: createProductInput.descripcion,
+        unidadMedida: createProductInput.unidadMedida,
+        precioCompra: createProductInput.precioCompra,
+        precioVenta: createProductInput.precioVenta,
+        moneda: createProductInput.moneda || 'COP',
+        stockMinimo: createProductInput.stockMinimo || 0,
+        stockActual: createProductInput.stockActual || 0,
+        esCombustible: createProductInput.esCombustible || false,
+        categoriaId: createProductInput.categoriaId,
+      },
       include: { categoria: true },
     });
 
@@ -352,6 +370,66 @@ export class ProductsService {
     }
   }
 
+  async updateTankLevelForPointOfSale(productoId: string, puntoVentaId: string, cantidad: number, tipo: 'entrada' | 'salida'): Promise<boolean> {
+    try {
+      // Buscar el tanque específico del punto de venta para este producto
+      const tanque = await this.prisma.tanque.findFirst({
+        where: { 
+          productoId: productoId,
+          puntoVentaId: puntoVentaId,
+          activo: true 
+        },
+        include: {
+          producto: true,
+          puntoVenta: true
+        }
+      });
+
+      if (!tanque) {
+        console.log(`[TANQUE] No se encontró tanque para producto ${productoId} en punto de venta ${puntoVentaId}`);
+        throw new NotFoundException(`No se encontró tanque activo para este producto en el punto de venta especificado`);
+      }
+
+      console.log(`[TANQUE] Tanque encontrado: ${tanque.numero} - Producto: ${tanque.producto.codigo} - Punto de Venta: ${tanque.puntoVenta.codigo}`);
+
+      // Calcular nuevo nivel
+      const nivelActualDecimal = parseFloat(tanque.nivelActual.toString());
+      const nuevoNivel = tipo === 'entrada' 
+        ? nivelActualDecimal + cantidad 
+        : nivelActualDecimal - cantidad;
+
+      console.log(`[TANQUE] Nivel actual: ${nivelActualDecimal}L, Cantidad: ${cantidad}L (${tipo}), Nuevo nivel: ${nuevoNivel}L`);
+
+      // Verificar que no exceda la capacidad
+      const capacidadTotal = parseFloat(tanque.capacidadTotal.toString());
+      if (nuevoNivel > capacidadTotal) {
+        throw new ConflictException(`El nivel ${nuevoNivel}L excede la capacidad del tanque ${capacidadTotal}L`);
+      }
+
+      // Verificar que no sea negativo
+      if (nuevoNivel < 0) {
+        throw new ConflictException(`Nivel de tanque insuficiente: se requiere ${cantidad}L pero solo hay ${nivelActualDecimal}L`);
+      }
+
+      // Actualizar el tanque
+      const tanqueActualizado = await this.prisma.tanque.update({
+        where: { id: tanque.id },
+        data: { 
+          nivelActual: nuevoNivel,
+          updatedAt: new Date()
+        },
+      });
+
+      console.log(`[TANQUE] Tanque ${tanque.numero} actualizado exitosamente: ${nivelActualDecimal}L -> ${nuevoNivel}L`);
+
+      return true;
+    } catch (error) {
+      console.error(`[TANQUE] Error actualizando tanque:`, error);
+      // Re-lanzar la excepción para que pueda ser manejada en el resolver
+      throw error;
+    }
+  }
+
   async getTankStatus() {
     const tanks = await this.prisma.producto.findMany({
       where: { esCombustible: true },
@@ -370,6 +448,151 @@ export class ProductsService {
       alertaBajo: tank.stockActual <= tank.stockMinimo,
       estado: tank.stockActual <= tank.stockMinimo ? 'BAJO' : 'NORMAL'
     }));
+  }
+
+  /**
+   * Análisis de rentabilidad de productos
+   */
+  async getProductRentabilityAnalysis(): Promise<any> {
+    const productos = await this.prisma.producto.findMany({
+      where: { activo: true },
+      include: { categoria: true },
+      orderBy: { nombre: 'asc' },
+    });
+
+    const productosConRentabilidad = productos.map(producto => {
+      const precioCompra = parseFloat(producto.precioCompra?.toString() || '0');
+      const precioVenta = parseFloat(producto.precioVenta?.toString() || '0');
+      const utilidad = precioVenta - precioCompra;
+      const margenUtilidad = precioVenta > 0 ? (utilidad / precioVenta) * 100 : 0;
+      const porcentajeGanancia = precioCompra > 0 ? (utilidad / precioCompra) * 100 : 0;
+
+      // Clasificación de rentabilidad
+      let clasificacionRentabilidad = 'BAJA';
+      if (margenUtilidad >= 30) clasificacionRentabilidad = 'ALTA';
+      else if (margenUtilidad >= 15) clasificacionRentabilidad = 'MEDIA';
+
+      // Recomendaciones automáticas
+      let recomendacion = '';
+      if (margenUtilidad < 10) {
+        recomendacion = 'Considere aumentar el precio de venta o reducir costos de compra';
+      } else if (margenUtilidad > 50) {
+        recomendacion = 'Excelente margen - monitorear competencia';
+      } else {
+        recomendacion = 'Margen saludable - mantener seguimiento';
+      }
+
+      return {
+        id: producto.id,
+        codigo: producto.codigo,
+        nombre: producto.nombre,
+        precioCompra,
+        precioVenta,
+        moneda: producto.moneda,
+        utilidad: Math.round(utilidad * 100) / 100,
+        margenUtilidad: Math.round(margenUtilidad * 100) / 100,
+        porcentajeGanancia: Math.round(porcentajeGanancia * 100) / 100,
+        ventasEstimadas: producto.stockActual * 0.3, // Estimación simple
+        utilidadProyectada: Math.round((utilidad * producto.stockActual * 0.3) * 100) / 100,
+        clasificacionRentabilidad,
+        recomendacion,
+      };
+    });
+
+    return productosConRentabilidad;
+  }
+
+  /**
+   * Resumen de rentabilidad general
+   */
+  async getRentabilitySummary(): Promise<any> {
+    const productos = await this.getProductRentabilityAnalysis();
+
+    if (productos.length === 0) {
+      return {
+        productos: [],
+        utilidadTotalProyectada: 0,
+        margenPromedioGeneral: 0,
+        productoMasRentable: 'N/A',
+        productoMenosRentable: 'N/A',
+        totalProductos: 0,
+      };
+    }
+
+    const utilidadTotalProyectada = productos.reduce((sum, p) => sum + p.utilidadProyectada, 0);
+    const margenPromedio = productos.reduce((sum, p) => sum + p.margenUtilidad, 0) / productos.length;
+
+    const productoMasRentable = productos.reduce((max, p) => 
+      p.margenUtilidad > max.margenUtilidad ? p : max
+    );
+
+    const productoMenosRentable = productos.reduce((min, p) => 
+      p.margenUtilidad < min.margenUtilidad ? p : min
+    );
+
+    return {
+      productos,
+      utilidadTotalProyectada: Math.round(utilidadTotalProyectada * 100) / 100,
+      margenPromedioGeneral: Math.round(margenPromedio * 100) / 100,
+      productoMasRentable: `${productoMasRentable.codigo} - ${productoMasRentable.nombre} (${productoMasRentable.margenUtilidad}%)`,
+      productoMenosRentable: `${productoMenosRentable.codigo} - ${productoMenosRentable.nombre} (${productoMenosRentable.margenUtilidad}%)`,
+      totalProductos: productos.length,
+    };
+  }
+
+  /**
+   * Sugerir precios optimizados
+   */
+  async suggestOptimalPricing(productoId: string, margenObjetivo: number = 25): Promise<any> {
+    const producto = await this.findById(productoId);
+    
+    if (!producto) {
+      throw new NotFoundException('Producto no encontrado');
+    }
+
+    const precioCompra = producto.precioCompra;
+    const precioVentaActual = producto.precioVenta;
+    
+    // Calcular precio óptimo basado en margen objetivo
+    const precioVentaOptimo = precioCompra / (1 - (margenObjetivo / 100));
+    
+    // Calcular diferentes escenarios
+    const escenarios = [
+      {
+        nombre: 'Conservador (15% margen)',
+        precioVenta: precioCompra / (1 - 0.15),
+        margen: 15,
+      },
+      {
+        nombre: 'Objetivo (25% margen)',
+        precioVenta: precioVentaOptimo,
+        margen: margenObjetivo,
+      },
+      {
+        nombre: 'Agresivo (35% margen)',
+        precioVenta: precioCompra / (1 - 0.35),
+        margen: 35,
+      },
+    ];
+
+    return {
+      productoActual: {
+        codigo: producto.codigo,
+        nombre: producto.nombre,
+        precioCompra,
+        precioVentaActual,
+        margenActual: producto.margenUtilidad,
+      },
+      escenarios: escenarios.map(e => ({
+        ...e,
+        precioVenta: Math.round(e.precioVenta * 100) / 100,
+        utilidadPorUnidad: Math.round((e.precioVenta - precioCompra) * 100) / 100,
+        diferenciaPrecioActual: Math.round((e.precioVenta - precioVentaActual) * 100) / 100,
+      })),
+      recomendacion: margenObjetivo <= producto.margenUtilidad 
+        ? 'El margen actual ya cumple o supera el objetivo'
+        : `Considere ajustar el precio de venta a $${Math.round(precioVentaOptimo * 100) / 100} ${producto.moneda}`,
+    };
   }
 
   async validateTurnoExists(turnoId: string): Promise<boolean> {

@@ -40,7 +40,7 @@ export class ProductWithConversionsResponse {
   unidadMedida: string;
 
   @Field(() => Float)
-  precio: number;
+  precioVenta: number;
 
   @Field(() => Int)
   stockMinimo: number;

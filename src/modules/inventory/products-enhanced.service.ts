@@ -153,14 +153,14 @@ export class ProductsEnhancedService {
         stockLitros: conversionInfo.litros,
         stockGalones: conversionInfo.galones,
         valorInventario: {
-          original: product.stockActual * parseFloat(product.precio.toString()),
+          original: product.stockActual * parseFloat(product.precioVenta.toString()),
           enLitros: conversionInfo.litros.cantidad * this.unitConversion.convert(
-            parseFloat(product.precio.toString()),
+            parseFloat(product.precioVenta.toString()),
             product.unidadMedida,
             'litros'
           ),
           enGalones: conversionInfo.galones.cantidad * this.unitConversion.convert(
-            parseFloat(product.precio.toString()),
+            parseFloat(product.precioVenta.toString()),
             product.unidadMedida,
             'galones'
           )

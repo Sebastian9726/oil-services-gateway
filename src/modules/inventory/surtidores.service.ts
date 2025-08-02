@@ -10,74 +10,60 @@ export class SurtidoresService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createSurtidorInput: CreateSurtidorInput): Promise<Surtidor> {
-    try {
-      // Verificar si el número de surtidor ya existe
-      const existingSurtidor = await this.prisma.surtidor.findUnique({
-        where: { numero: createSurtidorInput.numero },
-      });
+    // Verificar si el número ya existe en el punto de venta
+    const existingSurtidor = await this.prisma.surtidor.findFirst({
+      where: { 
+        numero: createSurtidorInput.numero,
+        puntoVentaId: createSurtidorInput.puntoVentaId 
+      },
+    });
 
-      if (existingSurtidor) {
-        throw new ConflictException(`Ya existe un surtidor con el número: ${createSurtidorInput.numero}`);
-      }
-
-      // Validar que el número de mangueras coincida con las mangueras proporcionadas
-      if (createSurtidorInput.mangueras.length !== createSurtidorInput.cantidadMangueras) {
-        throw new BadRequestException(
-          `El número de mangueras (${createSurtidorInput.mangueras.length}) no coincide con la cantidad especificada (${createSurtidorInput.cantidadMangueras})`
-        );
-      }
-
-      // Verificar que los productos existan
-      const productIds = createSurtidorInput.mangueras.map(m => m.productoId);
-      const productos = await this.prisma.producto.findMany({
-        where: { id: { in: productIds } },
-      });
-
-      if (productos.length !== productIds.length) {
-        const foundIds = productos.map(p => p.id);
-        const missingIds = productIds.filter(id => !foundIds.includes(id));
-        throw new BadRequestException(`Productos no encontrados: ${missingIds.join(', ')}`);
-      }
-
-      // Crear surtidor con mangueras
-      const surtidor = await this.prisma.surtidor.create({
-        data: {
-          numero: createSurtidorInput.numero,
-          nombre: createSurtidorInput.nombre,
-          descripcion: createSurtidorInput.descripcion,
-          ubicacion: createSurtidorInput.ubicacion,
-          cantidadMangueras: createSurtidorInput.cantidadMangueras,
-          activo: createSurtidorInput.activo ?? true,
-          fechaInstalacion: createSurtidorInput.fechaInstalacion,
-          fechaMantenimiento: createSurtidorInput.fechaMantenimiento,
-          observaciones: createSurtidorInput.observaciones,
-          mangueras: {
-            create: createSurtidorInput.mangueras.map(manguera => ({
-              numero: manguera.numero,
-              color: manguera.color,
-              lecturaAnterior: manguera.lecturaAnterior ?? 0,
-              lecturaActual: manguera.lecturaActual ?? 0,
-              productoId: manguera.productoId,
-              activo: manguera.activo ?? true,
-            })),
-          },
-        },
-        include: {
-          mangueras: {
-            include: {
-              producto: true,
-            },
-          },
-        },
-      });
-
-      return this.formatSurtidor(surtidor);
-    } catch (error) {
-      if (error instanceof ConflictException || error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new Error(`Error creating surtidor: ${error.message}`);
+    if (existingSurtidor) {
+      throw new ConflictException('Ya existe un surtidor con este número en este punto de venta');
     }
+
+    const surtidor = await this.prisma.surtidor.create({
+      data: {
+        numero: createSurtidorInput.numero,
+        nombre: createSurtidorInput.nombre,
+        descripcion: createSurtidorInput.descripcion,
+        ubicacion: createSurtidorInput.ubicacion,
+        cantidadMangueras: createSurtidorInput.cantidadMangueras,
+        activo: createSurtidorInput.activo,
+        fechaInstalacion: createSurtidorInput.fechaInstalacion 
+          ? new Date(createSurtidorInput.fechaInstalacion) 
+          : new Date(),
+        fechaMantenimiento: createSurtidorInput.fechaMantenimiento 
+          ? new Date(createSurtidorInput.fechaMantenimiento) 
+          : new Date(),
+        observaciones: createSurtidorInput.observaciones,
+        puntoVenta: {
+          connect: { id: createSurtidorInput.puntoVentaId }
+        },
+        mangueras: {
+          create: createSurtidorInput.mangueras?.map(manguera => ({
+            numero: manguera.numero,
+            color: manguera.color,
+            lecturaAnterior: manguera.lecturaAnterior ?? 0,
+            lecturaActual: manguera.lecturaActual ?? 0,
+            producto: {
+              connect: { id: manguera.productoId }
+            },
+            activo: manguera.activo ?? true,
+          })) || [],
+        },
+      },
+      include: {
+        puntoVenta: true,
+        mangueras: {
+          include: {
+            producto: true,
+          },
+        },
+      },
+    });
+
+    return this.formatSurtidor(surtidor);
   }
 
   async findAll(page = 1, limit = 10, activo?: boolean): Promise<SurtidorListResponse> {
@@ -95,6 +81,11 @@ export class SurtidoresService {
       const queryOptions: any = {
         where: whereCondition,
         include: {
+          puntoVenta: {
+            include: {
+              empresa: true,
+            },
+          },
           mangueras: {
             include: {
               producto: true,
@@ -120,7 +111,7 @@ export class SurtidoresService {
       const actualPage = usesPagination ? page : 1;
 
       return {
-        surtidores: surtidores.map(this.formatSurtidor),
+        surtidores: surtidores.map((surtidor) => this.formatSurtidor(surtidor)),
         total,
         page: actualPage,
         limit: actualLimit,
@@ -135,6 +126,11 @@ export class SurtidoresService {
       const surtidor = await this.prisma.surtidor.findUnique({
         where: { id },
         include: {
+          puntoVenta: {
+            include: {
+              empresa: true,
+            },
+          },
           mangueras: {
             include: {
               producto: true,
@@ -157,24 +153,29 @@ export class SurtidoresService {
     }
   }
 
-  async findByNumero(numero: string): Promise<Surtidor | null> {
-    try {
-      const surtidor = await this.prisma.surtidor.findUnique({
-        where: { numero },
-        include: {
-          mangueras: {
-            include: {
-              producto: true,
-            },
-            orderBy: { numero: 'asc' },
+  async findByNumero(numero: string, puntoVentaId: string): Promise<Surtidor | null> {
+    const surtidor = await this.prisma.surtidor.findUnique({
+      where: { 
+        puntoVentaId_numero: {
+          puntoVentaId: puntoVentaId,
+          numero: numero
+        }
+      },
+      include: {
+        puntoVenta: {
+          include: {
+            empresa: true,
           },
         },
-      });
+        mangueras: {
+          include: {
+            producto: true,
+          },
+        },
+      },
+    });
 
-      return surtidor ? this.formatSurtidor(surtidor) : null;
-    } catch (error) {
-      throw new Error(`Error fetching surtidor by number: ${error.message}`);
-    }
+    return surtidor ? this.formatSurtidor(surtidor) : null;
   }
 
   async update(id: string, updateSurtidorInput: UpdateSurtidorInput): Promise<Surtidor> {
@@ -222,6 +223,11 @@ export class SurtidoresService {
           } : undefined,
         },
         include: {
+          puntoVenta: {
+            include: {
+              empresa: true,
+            },
+          },
           mangueras: {
             include: {
               producto: true,
@@ -247,6 +253,11 @@ export class SurtidoresService {
       const surtidor = await this.prisma.surtidor.delete({
         where: { id },
         include: {
+          puntoVenta: {
+            include: {
+              empresa: true,
+            },
+          },
           mangueras: {
             include: {
               producto: true,
@@ -264,13 +275,18 @@ export class SurtidoresService {
     }
   }
 
-  async validateSurtidorExists(numero: string): Promise<boolean> {
+  async validateSurtidorExists(numero: string, puntoVentaId?: string): Promise<boolean> {
     try {
-      const surtidor = await this.prisma.surtidor.findUnique({
-        where: { 
-          numero,
-          activo: true,
-        },
+      const whereCondition = puntoVentaId ? {
+        puntoVentaId: puntoVentaId,
+        numero: numero
+      } : {
+        numero: numero,
+        activo: true,
+      };
+
+      const surtidor = await this.prisma.surtidor.findFirst({
+        where: whereCondition,
       });
       return !!surtidor;
     } catch (error) {
@@ -341,8 +357,8 @@ export class SurtidoresService {
     precio: number,
     tipoOperacion: string = 'cierre_turno',
     usuarioId?: string,
-    turnoId?: string,
-    cierreTurnoId?: string,
+    startTime?: Date,
+    finishTime?: Date,
     observaciones?: string
   ): Promise<{ success: boolean; cantidadVendida: number; valorVenta: number }> {
     console.log(`[SURTIDORES] updateMangueraReadingsWithHistory iniciado:`, {
@@ -352,7 +368,8 @@ export class SurtidoresService {
       precio,
       tipoOperacion,
       usuarioId,
-      turnoId
+      startTime: startTime ? new Date(startTime) : new Date(),  // ← aquí
+      finishTime: finishTime ? new Date(finishTime) : new Date()
     });
 
     try {
@@ -422,8 +439,8 @@ export class SurtidoresService {
           tipoOperacion,
           observaciones,
           usuarioId,
-          turnoId,
-          cierreTurnoId,
+          startTime,
+          finishTime
         },
       });
 
@@ -521,7 +538,11 @@ export class SurtidoresService {
             nombre: item.manguera.producto.nombre,
             descripcion: item.manguera.producto.descripcion,
             unidadMedida: item.manguera.producto.unidadMedida,
-            precio: Number(item.manguera.producto.precio),
+            precio: Number((item.manguera.producto as any).precioVenta || (item.manguera.producto as any).precio || 0),
+            precioCompra: Number((item.manguera.producto as any).precioCompra || 0),
+            precioVenta: Number((item.manguera.producto as any).precioVenta || (item.manguera.producto as any).precio || 0),
+            moneda: (item.manguera.producto as any).moneda || 'COP',
+            porcentajeGanancia: 0, // Calcular después
             costo: 0, // Default value - not in schema
             utilidad: 0, // Default value - not in schema  
             margenUtilidad: 0, // Default value - not in schema
@@ -543,8 +564,8 @@ export class SurtidoresService {
           },
         },
         usuarioId: item.usuarioId,
-        turnoId: item.turnoId,
-        cierreTurnoId: item.cierreTurnoId,
+        startTime: item.startTime,
+        finishTime: item.finishTime,
       }));
 
       return {
@@ -592,7 +613,7 @@ export class SurtidoresService {
         producto: {
           codigo: manguera.producto.codigo,
           nombre: manguera.producto.nombre,
-          precio: Number(manguera.producto.precio),
+          precio: Number((manguera.producto as any).precioVenta || (manguera.producto as any).precio || 0),
         },
       }));
     } catch (error) {
@@ -614,6 +635,56 @@ export class SurtidoresService {
       observaciones: surtidor.observaciones,
       createdAt: surtidor.createdAt,
       updatedAt: surtidor.updatedAt,
+      puntoVenta: {
+        id: surtidor.puntoVenta.id,
+        codigo: surtidor.puntoVenta.codigo,
+        nombre: surtidor.puntoVenta.nombre,
+        descripcion: surtidor.puntoVenta.descripcion,
+        direccion: surtidor.puntoVenta.direccion,
+        ciudad: surtidor.puntoVenta.ciudad,
+        provincia: surtidor.puntoVenta.provincia,
+        pais: surtidor.puntoVenta.pais,
+        codigoPostal: surtidor.puntoVenta.codigoPostal,
+        telefono: surtidor.puntoVenta.telefono,
+        telefonoMovil: surtidor.puntoVenta.telefonoMovil,
+        email: surtidor.puntoVenta.email,
+        horarioApertura: surtidor.puntoVenta.horarioApertura,
+        horarioCierre: surtidor.puntoVenta.horarioCierre,
+        diasAtencion: surtidor.puntoVenta.diasAtencion,
+        coordenadasGPS: surtidor.puntoVenta.coordenadasGPS,
+        tipoEstacion: surtidor.puntoVenta.tipoEstacion,
+        serviciosAdicionales: surtidor.puntoVenta.serviciosAdicionales,
+        capacidadMaxima: surtidor.puntoVenta.capacidadMaxima,
+        fechaApertura: surtidor.puntoVenta.fechaApertura,
+        activo: surtidor.puntoVenta.activo,
+        createdAt: surtidor.puntoVenta.createdAt,
+        updatedAt: surtidor.puntoVenta.updatedAt,
+        empresaId: surtidor.puntoVenta.empresaId,
+        empresa: {
+          id: surtidor.puntoVenta.empresa.id,
+          rut: surtidor.puntoVenta.empresa.rut,
+          razonSocial: surtidor.puntoVenta.empresa.razonSocial,
+          nombreComercial: surtidor.puntoVenta.empresa.nombreComercial,
+          nombre: surtidor.puntoVenta.empresa.nombre,
+          direccion: surtidor.puntoVenta.empresa.direccion,
+          ciudad: surtidor.puntoVenta.empresa.ciudad,
+          provincia: surtidor.puntoVenta.empresa.provincia,
+          pais: surtidor.puntoVenta.empresa.pais,
+          codigoPostal: surtidor.puntoVenta.empresa.codigoPostal,
+          telefono: surtidor.puntoVenta.empresa.telefono,
+          telefonoMovil: surtidor.puntoVenta.empresa.telefonoMovil,
+          email: surtidor.puntoVenta.empresa.email,
+          sitioWeb: surtidor.puntoVenta.empresa.sitioWeb,
+          logo: surtidor.puntoVenta.empresa.logo,
+          sector: surtidor.puntoVenta.empresa.sector,
+          tipoEmpresa: surtidor.puntoVenta.empresa.tipoEmpresa,
+          fechaConstitucion: surtidor.puntoVenta.empresa.fechaConstitucion,
+          activo: surtidor.puntoVenta.empresa.activo,
+          createdAt: surtidor.puntoVenta.empresa.createdAt,
+          updatedAt: surtidor.puntoVenta.empresa.updatedAt,
+          puntosVenta: [],
+        },
+      },
       mangueras: surtidor.mangueras?.map((manguera: any) => ({
         id: manguera.id,
         numero: manguera.numero,
@@ -626,8 +697,47 @@ export class SurtidoresService {
         surtidorId: manguera.surtidorId,
         surtidor: surtidor,
         productoId: manguera.productoId,
-        producto: manguera.producto,
+        producto: this.formatProductoForGraphQL(manguera.producto),
       })) || [],
+    };
+  }
+
+  private formatProductoForGraphQL(producto: any) {
+    const precioCompra = Number((producto as any).precioCompra || 0);
+    const precioVenta = Number((producto as any).precioVenta || (producto as any).precio || 0);
+    
+    // Calcular campos financieros
+    const utilidad = precioVenta - precioCompra;
+    const margenUtilidad = precioVenta > 0 ? ((utilidad / precioVenta) * 100) : 0;
+    const porcentajeGanancia = precioCompra > 0 ? ((utilidad / precioCompra) * 100) : 0;
+
+    return {
+      id: producto.id,
+      codigo: producto.codigo,
+      nombre: producto.nombre,
+      descripcion: producto.descripcion,
+      unidadMedida: producto.unidadMedida,
+      precioCompra: precioCompra,
+      precioVenta: precioVenta,
+      moneda: (producto as any).moneda || 'COP',
+      utilidad: Math.round(utilidad * 100) / 100,
+      margenUtilidad: Math.round(margenUtilidad * 100) / 100,
+      porcentajeGanancia: Math.round(porcentajeGanancia * 100) / 100,
+      stockMinimo: producto.stockMinimo,
+      stockActual: producto.stockActual,
+      esCombustible: producto.esCombustible,
+      activo: producto.activo,
+      createdAt: producto.createdAt,
+      updatedAt: producto.updatedAt,
+      categoriaId: producto.categoriaId,
+      categoria: producto.categoria || {
+        id: '',
+        nombre: '',
+        descripcion: null,
+        activo: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
     };
   }
 } 
