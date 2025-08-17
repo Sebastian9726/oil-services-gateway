@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException }
 import { PrismaService } from '../../config/prisma/prisma.service';
 import { CreateTanqueInput, CreateTablaAforoInput } from './dto/create-tanque.input';
 import { UpdateTanqueInput } from './dto/update-tanque.input';
-import { Tanque, TanqueWithStatus } from './entities/tanque.entity';
+import { Tanque, TanqueWithStatus, TanqueUpdateResponse } from './entities/tanque.entity';
 
 @Injectable()
 export class TanquesService {
@@ -15,7 +15,7 @@ export class TanquesService {
     // Verificar si el número ya existe en el punto de venta
     const existingTanque = await this.prisma.tanque.findFirst({
       where: { 
-        numero: createTanqueInput.numero,
+        nombre: createTanqueInput.nombre,
         puntoVentaId: createTanqueInput.puntoVentaId 
       },
     });
@@ -45,13 +45,15 @@ export class TanquesService {
     // Crear el tanque
     const tanque = await this.prisma.tanque.create({
       data: {
-        numero: createTanqueInput.numero,
+        nombre: createTanqueInput.nombre,
         capacidadTotal: createTanqueInput.capacidadTotal,
         nivelActual: createTanqueInput.nivelActual ?? 0,
         nivelMinimo: createTanqueInput.nivelMinimo ?? 0,
+        alturaActual: createTanqueInput.alturaActual ?? 0,
         diametro: createTanqueInput.diametro,
         alturaMaxima: createTanqueInput.alturaMaxima,
         tipoTanque: createTanqueInput.tipoTanque ?? 'CILINDRICO',
+        // unidadMedida: createTanqueInput.unidadMedida ?? 'GALONES', // Temporarily commented - restart IDE
         activo: createTanqueInput.activo ?? true,
         productoId: createTanqueInput.productoId,
         puntoVentaId: createTanqueInput.puntoVentaId,
@@ -93,7 +95,7 @@ export class TanquesService {
           orderBy: { altura: 'asc' }
         },
       },
-      orderBy: { numero: 'asc' },
+      orderBy: { nombre: 'asc' },
     });
 
     return tanques.map(tanque => this.mapTanqueWithCalculations(tanque));
@@ -141,10 +143,10 @@ export class TanquesService {
     }
 
     // Si se está cambiando el número, verificar que no exista otro con el mismo número en el punto de venta
-    if (updateTanqueInput.numero && updateTanqueInput.numero !== existingTanque.numero) {
+    if (updateTanqueInput.nombre && updateTanqueInput.nombre !== existingTanque.nombre) {
       const duplicateTanque = await this.prisma.tanque.findFirst({
         where: { 
-          numero: updateTanqueInput.numero,
+          nombre: updateTanqueInput.nombre,
           puntoVentaId: existingTanque.puntoVentaId,
           id: { not: id }
         },
@@ -165,6 +167,7 @@ export class TanquesService {
         ...(updateTanqueInput.diametro !== undefined && { diametro: updateTanqueInput.diametro }),
         ...(updateTanqueInput.alturaMaxima !== undefined && { alturaMaxima: updateTanqueInput.alturaMaxima }),
         ...(updateTanqueInput.tipoTanque && { tipoTanque: updateTanqueInput.tipoTanque }),
+        ...(updateTanqueInput.unidadMedida && { unidadMedida: updateTanqueInput.unidadMedida }), // Temporarily commented - restart IDE
         ...(updateTanqueInput.activo !== undefined && { activo: updateTanqueInput.activo }),
         ...(updateTanqueInput.productoId && { productoId: updateTanqueInput.productoId }),
       },
@@ -231,6 +234,98 @@ export class TanquesService {
     }
 
     return this.update(id, { id, nivelActual: nuevoNivel });
+  }
+
+  /**
+   * Actualizar nivel del tanque basado en altura del fluido (usando tabla de aforo)
+   * Incluye validaciones y warnings
+   */
+  async updateLevelByHeight(id: string, alturaFluido: number): Promise<TanqueUpdateResponse> {
+    const tanque = await this.prisma.tanque.findUnique({
+      where: { id },
+      include: {
+        tablaAforo: true
+      }
+    });
+
+    if (!tanque) {
+      throw new NotFoundException('Tanque no encontrado');
+    }
+
+    if (alturaFluido < 0) {
+      throw new BadRequestException('La altura del fluido no puede ser negativa');
+    }
+
+    // Verificar que hay tabla de aforo
+    if (!tanque.tablaAforo || tanque.tablaAforo.length === 0) {
+      throw new BadRequestException('El tanque no tiene tabla de aforo configurada. No se puede convertir altura a volumen.');
+    }
+
+    const warnings: string[] = [];
+    const messages: string[] = [];
+    let status = 'NORMAL';
+
+    // Verificar si es la misma altura
+    // const alturaActualAnterior = parseFloat(tanque.alturaActual.toString()); // TODO: Uncomment when Prisma recognizes field
+    // if (Math.abs(alturaFluido - alturaActualAnterior) < 0.1) { // Tolerancia de 0.1 cm
+    //   warnings.push(`La altura ingresada (${alturaFluido}cm) es la misma que la altura actual (${alturaActualAnterior}cm)`);
+    //   messages.push('No se detectaron cambios significativos en la altura del fluido');
+    //   status = 'WARNING';
+    // }
+
+    // Convertir altura a volumen usando tabla de aforo
+    const volumen = await this.getVolumeByHeight(id, alturaFluido);
+
+    // Verificar que no exceda la capacidad
+    const capacidadTotal = parseFloat(tanque.capacidadTotal.toString());
+    if (volumen > capacidadTotal) {
+      throw new BadRequestException(`El volumen calculado (${volumen}) excede la capacidad del tanque (${capacidadTotal})`);
+    }
+
+    // Verificar nivel mínimo
+    const nivelMinimo = parseFloat(tanque.nivelMinimo.toString());
+    if (volumen < nivelMinimo) {
+      warnings.push(`¡ALERTA! El volumen calculado (${volumen}L) está por debajo del nivel mínimo (${nivelMinimo}L)`);
+      // TODO: Add alert to Sentry or other monitoring service or send email
+      messages.push(`Tanque con nivel crítico. Se requiere abastecimiento urgente.`);
+      status = 'CRITICAL';
+    } else if (volumen < nivelMinimo * 1.2) { // Warning si está dentro del 20% del mínimo
+      warnings.push(`Nivel bajo: El volumen (${volumen}L) está cerca del nivel mínimo (${nivelMinimo}L)`);
+      // TODO: Add alert to Sentry or other monitoring service or send email
+      messages.push('Se recomienda programar abastecimiento pronto');
+      status = status === 'CRITICAL' ? 'CRITICAL' : 'WARNING';
+    }
+
+    // Actualizar tanto el nivel como la altura actual
+    const tanqueActualizado = await this.prisma.tanque.update({
+      where: { id },
+      data: { 
+        nivelActual: volumen,
+        alturaActual: alturaFluido, // TODO: Uncomment when Prisma client is regenerated
+        updatedAt: new Date() 
+      },
+      include: {
+        producto: true,
+        puntoVenta: true,
+        tablaAforo: {
+          orderBy: { altura: 'asc' }
+        },
+      },
+    });
+
+    const tanqueMapeado = this.mapTanqueWithCalculations(tanqueActualizado);
+
+    if (warnings.length === 0) {
+      messages.push(`Nivel actualizado exitosamente: ${volumen}L (${alturaFluido}cm)`);
+    }
+
+    return {
+      tanque: tanqueMapeado,
+      success: true,
+      warnings,
+      messages,
+      status
+    };
   }
 
   /**
@@ -381,8 +476,48 @@ export class TanquesService {
       capacidadTotal: parseFloat(tanque.capacidadTotal.toString()),
       nivelActual: parseFloat(tanque.nivelActual.toString()),
       nivelMinimo: parseFloat(tanque.nivelMinimo.toString()),
+      alturaActual: parseFloat(tanque.alturaActual.toString()),
       diametro: tanque.diametro ? parseFloat(tanque.diametro.toString()) : undefined,
       alturaMaxima: tanque.alturaMaxima ? parseFloat(tanque.alturaMaxima.toString()) : undefined,
+      unidadMedida: tanque.unidadMedida,
+      producto: tanque.producto ? this.formatProductoForGraphQL(tanque.producto) : undefined,
+    };
+  }
+
+  /**
+   * Formatear producto para GraphQL con campos calculados
+   */
+  private formatProductoForGraphQL(producto: any) {
+    if (!producto) return undefined;
+
+    const precioCompra = parseFloat(producto.precioCompra?.toString() || '0');
+    const precioVenta = parseFloat(producto.precioVenta?.toString() || '0');
+    
+    // Calcular métricas de rentabilidad
+    const utilidad = precioVenta - precioCompra;
+    const margenUtilidad = precioVenta > 0 ? (utilidad / precioVenta) * 100 : 0;
+    const porcentajeGanancia = precioCompra > 0 ? (utilidad / precioCompra) * 100 : 0;
+    
+    return {
+      id: producto.id,
+      codigo: producto.codigo,
+      nombre: producto.nombre,
+      descripcion: producto.descripcion || null,
+      unidadMedida: producto.unidadMedida,
+      precioCompra: precioCompra,
+      precioVenta: precioVenta,
+      moneda: producto.moneda || 'COP',
+      utilidad: Math.round(utilidad * 100) / 100,
+      margenUtilidad: Math.round(margenUtilidad * 100) / 100,
+      porcentajeGanancia: Math.round(porcentajeGanancia * 100) / 100,
+      stockMinimo: producto.stockMinimo || 0,
+      stockActual: producto.stockActual || 0,
+      esCombustible: producto.esCombustible || false,
+      activo: producto.activo !== undefined ? producto.activo : true,
+      createdAt: producto.createdAt,
+      updatedAt: producto.updatedAt,
+      categoriaId: producto.categoriaId,
+      categoria: producto.categoria || null,
     };
   }
 

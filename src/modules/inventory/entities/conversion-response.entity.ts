@@ -63,8 +63,8 @@ export class ProductWithConversionsResponse {
   @Field()
   categoriaId: string;
 
-  @Field(() => Categoria)
-  categoria: Categoria;
+  @Field(() => Categoria, { nullable: true })
+  categoria?: Categoria;
 
   // Conversiones
   @Field(() => StockConversion)

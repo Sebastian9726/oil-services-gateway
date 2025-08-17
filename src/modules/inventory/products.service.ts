@@ -390,7 +390,7 @@ export class ProductsService {
         throw new NotFoundException(`No se encontró tanque activo para este producto en el punto de venta especificado`);
       }
 
-      console.log(`[TANQUE] Tanque encontrado: ${tanque.numero} - Producto: ${tanque.producto.codigo} - Punto de Venta: ${tanque.puntoVenta.codigo}`);
+      console.log(`[TANQUE] Tanque encontrado: ${tanque.nombre} - Producto: ${tanque.producto.codigo} - Punto de Venta: ${tanque.puntoVenta.codigo}`);
 
       // Calcular nuevo nivel
       const nivelActualDecimal = parseFloat(tanque.nivelActual.toString());
@@ -420,7 +420,7 @@ export class ProductsService {
         },
       });
 
-      console.log(`[TANQUE] Tanque ${tanque.numero} actualizado exitosamente: ${nivelActualDecimal}L -> ${nuevoNivel}L`);
+      console.log(`[TANQUE] Tanque ${tanque.nombre} actualizado exitosamente: ${nivelActualDecimal}L -> ${nuevoNivel}L`);
 
       return true;
     } catch (error) {
@@ -767,5 +767,160 @@ export class ProductsService {
     } catch (error) {
       throw new Error(`Error consultando cierre de turno: ${error.message}`);
     }
+  }
+
+  /**
+   * Dar de baja productos vencidos
+   */
+  async writeOffExpiredProducts(writeOffInput: any): Promise<any> {
+    const resultados = [];
+    const errores = [];
+    const advertencias = [];
+    let productosExitosos = 0;
+    let productosConError = 0;
+    let valorTotalPerdida = 0;
+
+    for (const item of writeOffInput.productos) {
+      try {
+        // Buscar el producto
+        const producto = await this.prisma.producto.findUnique({
+          where: { codigo: item.codigoProducto },
+          include: { categoria: true }
+        });
+        console.log('[writeOffExpiredProducts] producto', JSON.stringify(producto, null, 2));
+        if (!producto) {
+          errores.push(`Producto no encontrado: ${item.codigoProducto}`);
+          resultados.push({
+            codigoProducto: item.codigoProducto,
+            nombreProducto: 'PRODUCTO NO ENCONTRADO',
+            cantidadEliminada: 0,
+            unidadMedida: item.unidadMedida,
+            stockAnterior: 0,
+            stockActual: 0,
+            valorPerdida: 0,
+            motivoBaja: item.motivoBaja || 'VENCIMIENTO',
+            lote: item.lote,
+            fechaVencimiento: item.fechaVencimiento,
+            observaciones: item.observaciones,
+            procesadoExitosamente: false,
+            error: 'Producto no encontrado'
+          });
+          productosConError++;
+          continue;
+        }
+
+        // Verificar que hay suficiente stock
+        if (producto.stockActual < item.cantidad) {
+          const error = `Stock insuficiente. Disponible: ${producto.stockActual}, Solicitado: ${item.cantidad}`;
+          errores.push(`${item.codigoProducto}: ${error}`);
+          resultados.push({
+            codigoProducto: item.codigoProducto,
+            nombreProducto: producto.nombre,
+            cantidadEliminada: 0,
+            unidadMedida: item.unidadMedida,
+            stockAnterior: producto.stockActual,
+            stockActual: producto.stockActual,
+            valorPerdida: 0,
+            motivoBaja: item.motivoBaja || 'VENCIMIENTO',
+            lote: item.lote,
+            fechaVencimiento: item.fechaVencimiento,
+            observaciones: item.observaciones,
+            procesadoExitosamente: false,
+            error
+          });
+          productosConError++;
+          continue;
+        }
+
+        // Calcular el valor de la pérdida
+        const valorPerdida = Number(producto.precioCompra) * item.cantidad;
+        
+        // Actualizar el stock
+        const nuevoStock = producto.stockActual - item.cantidad;
+        const productoActualizado = await this.prisma.producto.update({
+          where: { id: producto.id },
+          data: { stockActual: nuevoStock }
+        });
+
+        // Crear observaciones detalladas
+        const motivoBaja = item.motivoBaja || 'VENCIMIENTO';
+        let observacionesCompletas = `BAJA POR ${motivoBaja}`;
+        if (item.lote) observacionesCompletas += ` - Lote: ${item.lote}`;
+        if (item.fechaVencimiento) observacionesCompletas += ` - Fecha vencimiento: ${item.fechaVencimiento}`;
+        if (item.observaciones) observacionesCompletas += ` - ${item.observaciones}`;
+        if (writeOffInput.responsable) observacionesCompletas += ` - Responsable: ${writeOffInput.responsable}`;
+
+        // Registrar entrada de inventario negativa para trazabilidad
+        await this.prisma.entradaInventario.create({
+          data: {
+            cantidad: -item.cantidad, // Cantidad negativa para indicar salida
+            precioUnitario: Number(producto.precioCompra),
+            precioTotal: -valorPerdida, // Valor negativo para indicar pérdida
+            numeroFactura: null,
+            observaciones: observacionesCompletas,
+            fechaEntrada: new Date(),
+            productoId: producto.id
+          }
+        });
+
+        resultados.push({
+          codigoProducto: item.codigoProducto,
+          nombreProducto: producto.nombre,
+          cantidadEliminada: item.cantidad,
+          unidadMedida: item.unidadMedida,
+          stockAnterior: producto.stockActual,
+          stockActual: nuevoStock,
+          valorPerdida,
+          motivoBaja,
+          lote: item.lote,
+          fechaVencimiento: item.fechaVencimiento,
+          observaciones: item.observaciones,
+          procesadoExitosamente: true,
+          error: null
+        });
+
+        productosExitosos++;
+        valorTotalPerdida += valorPerdida;
+
+        // Advertencia si el stock queda muy bajo
+        if (nuevoStock <= producto.stockMinimo && nuevoStock > 0) {
+          advertencias.push(`${item.codigoProducto}: Stock bajo después de la baja (${nuevoStock} <= ${producto.stockMinimo})`);
+        } else if (nuevoStock === 0) {
+          advertencias.push(`${item.codigoProducto}: Producto agotado después de la baja`);
+        }
+
+      } catch (error) {
+        errores.push(`Error procesando ${item.codigoProducto}: ${error.message}`);
+        resultados.push({
+          codigoProducto: item.codigoProducto,
+          nombreProducto: 'ERROR',
+          cantidadEliminada: 0,
+          unidadMedida: item.unidadMedida,
+          stockAnterior: 0,
+          stockActual: 0,
+          valorPerdida: 0,
+          motivoBaja: item.motivoBaja || 'VENCIMIENTO',
+          lote: item.lote,
+          fechaVencimiento: item.fechaVencimiento,
+          observaciones: item.observaciones,
+          procesadoExitosamente: false,
+          error: error.message
+        });
+        productosConError++;
+      }
+    }
+
+    return {
+      totalProductosProcesados: writeOffInput.productos.length,
+      productosExitosos,
+      productosConError,
+      valorTotalPerdida,
+      fechaProceso: new Date(),
+      responsable: writeOffInput.responsable,
+      observacionesGenerales: writeOffInput.observacionesGenerales,
+      resultados,
+      errores,
+      advertencias
+    };
   }
 } 

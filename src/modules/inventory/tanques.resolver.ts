@@ -5,8 +5,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 import { TanquesService } from './tanques.service';
-import { Tanque, TanqueWithStatus } from './entities/tanque.entity';
-import { CreateTanqueInput } from './dto/create-tanque.input';
+import { Tanque, TanqueWithStatus, TanqueUpdateResponse } from './entities/tanque.entity';
+import { CreateTanqueInput, CreateTablaAforoInput } from './dto/create-tanque.input';
 import { UpdateTanqueInput } from './dto/update-tanque.input';
 
 @Resolver(() => Tanque)
@@ -74,6 +74,16 @@ export class TanquesResolver {
     return this.tanquesService.updateLevel(id, nuevoNivel);
   }
 
+  @Mutation(() => TanqueUpdateResponse)
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager', 'employee')
+  async updateTankLevelByHeight(
+    @Args('id', { type: () => ID }) id: string,
+    @Args('alturaFluido', { type: () => Float }) alturaFluido: number
+  ): Promise<TanqueUpdateResponse> {
+    return this.tanquesService.updateLevelByHeight(id, alturaFluido);
+  }
+
   @Mutation(() => Boolean)
   @UseGuards(RolesGuard)
   @Roles('admin')
@@ -110,6 +120,28 @@ export class TanquesResolver {
     @Args('alturaMaxima', { type: () => Float }) alturaMaxima: number
   ): Promise<boolean> {
     await this.tanquesService.generarTablaAforoAutomatica(tanqueId, diametro, alturaMaxima);
+    return true;
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager')
+  async bulkCreateAforo(
+    @Args('tanqueId', { type: () => ID }) tanqueId: string,
+    @Args('entradas', { type: () => [CreateTablaAforoInput] }) entradas: CreateTablaAforoInput[]
+  ): Promise<boolean> {
+    await this.tanquesService.bulkCreateAforo(tanqueId, entradas);
+    return true;
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager')
+  async importAforoFromCSV(
+    @Args('tanqueId', { type: () => ID }) tanqueId: string,
+    @Args('csvData', { type: () => String }) csvData: string
+  ): Promise<boolean> {
+    await this.tanquesService.importAforoFromCSV(tanqueId, csvData);
     return true;
   }
 } 

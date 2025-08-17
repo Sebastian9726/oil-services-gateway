@@ -28,14 +28,14 @@ export class Producto {
   moneda: string; // Código ISO de la moneda (COP, USD, EUR, etc.)
 
   // Campos calculados
-  @Field(() => Float)
-  utilidad: number; // precioVenta - precioCompra
+  @Field(() => Float, { nullable: true })
+  utilidad?: number; // precioVenta - precioCompra
 
-  @Field(() => Float)
-  margenUtilidad: number; // ((precioVenta - precioCompra) / precioVenta) * 100
+  @Field(() => Float, { nullable: true })
+  margenUtilidad?: number; // ((precioVenta - precioCompra) / precioVenta) * 100
 
-  @Field(() => Float)
-  porcentajeGanancia: number; // ((precioVenta - precioCompra) / precioCompra) * 100
+  @Field(() => Float, { nullable: true })
+  porcentajeGanancia?: number; // ((precioVenta - precioCompra) / precioCompra) * 100
 
   @Field(() => Int)
   stockMinimo: number;
@@ -59,8 +59,8 @@ export class Producto {
   @Field()
   categoriaId: string;
 
-  @Field(() => Categoria)
-  categoria: Categoria;
+  @Field(() => Categoria, { nullable: true })
+  categoria?: Categoria;
 }
 
 @ObjectType()

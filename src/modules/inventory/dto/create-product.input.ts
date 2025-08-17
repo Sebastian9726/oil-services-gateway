@@ -80,4 +80,9 @@ export class CreateProductInput {
   @IsNotEmpty({ message: 'La categoría es requerida' })
   @IsString({ message: 'La categoría debe ser una cadena' })
   categoriaId: string;
+
+  @Field({ defaultValue: true })
+  @IsOptional()
+  @IsBoolean({ message: 'activo debe ser un valor booleano' })
+  activo: boolean = true;
 } 

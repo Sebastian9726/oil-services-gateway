@@ -1,31 +1,23 @@
 import { InputType, Field, Float } from '@nestjs/graphql';
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, Min, IsArray, ValidateNested, IsIn } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsBoolean, Min } from 'class-validator';
 
 @InputType()
-export class CreateTablaAforoInput {
-  @Field(() => Float)
-  @IsNumber({}, { message: 'La altura debe ser un número' })
-  @Min(0, { message: 'La altura debe ser mayor o igual a 0' })
-  altura: number; // En centímetros
-
-  @Field(() => Float)
-  @IsNumber({}, { message: 'El volumen debe ser un número' })
-  @Min(0, { message: 'El volumen debe ser mayor o igual a 0' })
-  volumen: number; // En litros
-}
-
-@InputType()
-export class CreateTanqueInput {
+export class CreateCarrotanqueInput {
   @Field()
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El nombre es requerido' })
   nombre: string;
 
-  @Field(() => Float)
+  @Field()
+  @IsString()
+  @IsNotEmpty({ message: 'La placa es requerida' })
+  placa: string;
+
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
   @IsNumber({}, { message: 'La capacidad total debe ser un número' })
   @Min(0, { message: 'La capacidad total debe ser mayor a 0' })
-  capacidadTotal: number;
+  capacidadTotal?: number;
 
   @Field(() => Float, { nullable: true })
   @IsOptional()
@@ -49,49 +41,82 @@ export class CreateTanqueInput {
   @IsOptional()
   @IsNumber({}, { message: 'El diámetro debe ser un número' })
   @Min(0, { message: 'El diámetro debe ser mayor a 0' })
-  diametro?: number; // En metros
+  diametro?: number;
 
   @Field(() => Float, { nullable: true })
   @IsOptional()
   @IsNumber({}, { message: 'La altura máxima debe ser un número' })
   @Min(0, { message: 'La altura máxima debe ser mayor a 0' })
-  alturaMaxima?: number; // En metros
+  alturaMaxima?: number;
 
   @Field({ nullable: true })
   @IsOptional()
   @IsString()
-  tipoTanque?: string;
+  tipoCarrotanque?: string;
 
-  @Field({ nullable: true })
+  @Field({ defaultValue: 'GALONES' })
   @IsOptional()
   @IsString()
-  @IsIn(['LITROS', 'GALONES'], { message: 'La unidad de medida debe ser LITROS o GALONES' })
   unidadMedida?: string;
 
-  @Field(() => Boolean, { nullable: true })
+  @Field({ defaultValue: true })
   @IsOptional()
   @IsBoolean()
   activo?: boolean;
 
-  @Field()
-  @IsString()
-  @IsNotEmpty()
-  productoId: string;
-
-  @Field()
-  @IsString()
-  @IsNotEmpty()
-  puntoVentaId: string;
-
-  @Field(() => [CreateTablaAforoInput], { nullable: true })
+  @Field({ nullable: true })
   @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateTablaAforoInput)
-  tablaAforo?: CreateTablaAforoInput[];
+  @IsString()
+  conductor?: string;
 
-  @Field(() => Boolean, { nullable: true })
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  empresa?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+}
+
+@InputType()
+export class CreateTablaAforoCarrotanqueInput {
+  @Field(() => Float)
+  @IsNumber({}, { message: 'La altura debe ser un número' })
+  @Min(0, { message: 'La altura debe ser mayor o igual a 0' })
+  altura: number;
+
+  @Field(() => Float)
+  @IsNumber({}, { message: 'El volumen debe ser un número' })
+  @Min(0, { message: 'El volumen debe ser mayor o igual a 0' })
+  volumen: number;
+}
+
+@InputType()
+export class FilterCarrotanquesInput {
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @Field({ nullable: true })
   @IsOptional()
   @IsBoolean()
-  generarTablaAforoAutomatica?: boolean; // Si es true, genera la tabla basada en diámetro y altura
+  activo?: boolean;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  empresa?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  conductor?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  placa?: string;
 } 

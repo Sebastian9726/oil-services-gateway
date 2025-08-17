@@ -1,47 +1,33 @@
-import { InputType, Field, Float } from '@nestjs/graphql';
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsArray, ValidateNested, Min, IsDate, IsEnum } from 'class-validator';
+import { InputType, Field, Float, Int } from '@nestjs/graphql';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, IsArray, ValidateNested, IsDate } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// Importamos el enum de métodos de pago
-enum MetodoPagoEnum {
-  EFECTIVO = 'EFECTIVO',
-  TARJETA_CREDITO = 'TARJETA_CREDITO',
-  TARJETA_DEBITO = 'TARJETA_DEBITO',
-  TRANSFERENCIA = 'TRANSFERENCIA',
-  QR = 'QR',
-  CHEQUE = 'CHEQUE',
-  CREDITO = 'CREDITO'
-}
-
 @InputType()
-export class MetodoPagoTurnoInput {
-  @Field(() => String)
-  @IsEnum(MetodoPagoEnum, { message: 'Método de pago inválido' })
-  metodoPago: MetodoPagoEnum;
-
-  @Field(() => Float)
-  @IsNumber({}, { message: 'El monto debe ser un número' })
-  @Min(0, { message: 'El monto debe ser mayor o igual a 0' })
-  monto: number;
-
-  @Field({ nullable: true })
-  @IsOptional()
+export class ProductSaleInput {
+  @Field()
   @IsString()
-  observaciones?: string;
-}
+  @IsNotEmpty({ message: 'El código del producto es requerido' })
+  codigoProducto: string;
 
-@InputType()
-export class ResumenVentasTurnoInput {
   @Field(() => Float)
-  @IsNumber({}, { message: 'El total de ventas debe ser un número' })
-  @Min(0, { message: 'El total de ventas debe ser mayor o igual a 0' })
-  totalVentasTurno: number;
+  @IsNumber({}, { message: 'La cantidad debe ser un número' })
+  @Min(0.01, { message: 'La cantidad debe ser mayor a 0' })
+  cantidad: number;
 
-  @Field(() => [MetodoPagoTurnoInput])
-  @IsArray({ message: 'Los métodos de pago deben ser un arreglo' })
-  @ValidateNested({ each: true })
-  @Type(() => MetodoPagoTurnoInput)
-  metodosPago: MetodoPagoTurnoInput[];
+  @Field()
+  @IsString()
+  @IsNotEmpty({ message: 'La unidad de medida es requerida' })
+  unidadMedida: string; // "unidades", "litros", "galones"
+
+  @Field(() => Float)
+  @IsNumber({}, { message: 'El precio unitario debe ser un número' })
+  @Min(0, { message: 'El precio unitario debe ser mayor o igual a 0' })
+  precioUnitario: number;
+
+  @Field(() => Float)
+  @IsNumber({}, { message: 'El valor total debe ser un número' })
+  @Min(0, { message: 'El valor total debe ser mayor o igual a 0' })
+  valorTotal: number;
 
   @Field({ nullable: true })
   @IsOptional()
@@ -53,28 +39,28 @@ export class ResumenVentasTurnoInput {
 export class HoseReadingInput {
   @Field()
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El número de manguera es requerido' })
   numeroManguera: string;
 
   @Field()
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El código del producto es requerido' })
   codigoProducto: string;
 
   @Field(() => Float)
-  @IsNumber()
-  @Min(0)
+  @IsNumber({}, { message: 'La lectura anterior debe ser un número' })
+  @Min(0, { message: 'La lectura anterior debe ser mayor o igual a 0' })
   lecturaAnterior: number;
 
   @Field(() => Float)
-  @IsNumber()
-  @Min(0)
+  @IsNumber({}, { message: 'La lectura actual debe ser un número' })
+  @Min(0, { message: 'La lectura actual debe ser mayor o igual a 0' })
   lecturaActual: number;
 
   @Field()
   @IsString()
-  @IsNotEmpty()
-  unidadMedida: string;
+  @IsNotEmpty({ message: 'La unidad de medida es requerida' })
+  unidadMedida: string; // "litros" o "galones"
 
   @Field({ nullable: true })
   @IsOptional()
@@ -86,7 +72,7 @@ export class HoseReadingInput {
 export class DispenserReadingInput {
   @Field()
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El número de surtidor es requerido' })
   numeroSurtidor: string;
 
   @Field(() => [HoseReadingInput])
@@ -102,27 +88,109 @@ export class DispenserReadingInput {
 }
 
 @InputType()
-export class ShiftClosureInput {
+export class MetodoPagoInput {
   @Field()
   @IsString()
-  @IsNotEmpty()
-  puntoVentaId: string;
+  @IsNotEmpty({ message: 'El método de pago es requerido' })
+  metodoPago: string; // "EFECTIVO", "TARJETA_CREDITO", "TARJETA_DEBITO", "TRANSFERENCIA", etc.
+
+  @Field(() => Float)
+  @IsNumber({}, { message: 'El monto debe ser un número' })
+  @Min(0, { message: 'El monto debe ser mayor o igual a 0' })
+  monto: number;
 
   @Field({ nullable: true })
-  @IsNotEmpty()
-  @IsDate()
-  startTime?: Date;
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+}
 
-  @Field({ nullable: true })    
-  @IsNotEmpty()
-  @IsDate()
-  finishTime: Date;
+@InputType()
+export class ResumenVentasTurnoInput {
+  @Field(() => Float)
+  @IsNumber({}, { message: 'El total de ventas del turno debe ser un número' })
+  @Min(0, { message: 'El total de ventas del turno debe ser mayor o igual a 0' })
+  totalVentasTurno: number;
 
+  @Field(() => [MetodoPagoInput])
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MetodoPagoInput)
+  metodosPago: MetodoPagoInput[];
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+}
+
+@InputType()
+export class TankHeightReadingInput {
+  @Field()
+  @IsString()
+  @IsNotEmpty({ message: 'El ID del tanque es requerido' })
+  tanqueId: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  nombreTanque?: string;
+
+  @Field(() => Float)
+  @IsNumber({}, { message: 'La altura del fluido debe ser un número' })
+  @Min(0, { message: 'La altura del fluido debe ser mayor o igual a 0' })
+  alturaFluido: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  tipoTanque?: string; // "FIJO", "CARROTANQUE"
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+}
+
+@InputType()
+export class CierreTurnoInput {
   @Field(() => [DispenserReadingInput])
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => DispenserReadingInput)
   lecturasSurtidores: DispenserReadingInput[];
+
+  @Field(() => [TankHeightReadingInput], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TankHeightReadingInput)
+  lecturasTanques?: TankHeightReadingInput[];
+
+  @Field(() => [ProductSaleInput], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductSaleInput)
+  ventasProductos?: ProductSaleInput[];
+
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0, { message: 'La cantidad de ventas debe ser mayor o igual a 0' })
+  cantidadVentasRealizadas?: number;
+
+  @Field()
+  @IsNotEmpty({ message: 'El ID del punto de venta es requerido' })
+  puntoVentaId: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'La fecha y hora de inicio del turno es requerida' })
+  startTime: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'La fecha y hora de fin del turno es requerida' })
+  finishTime: string;
 
   @Field(() => ResumenVentasTurnoInput)
   @ValidateNested()
@@ -137,5 +205,4 @@ export class ShiftClosureInput {
 
 // Keep Spanish versions for backward compatibility
 export { HoseReadingInput as LecturaMangueraInput };
-export { DispenserReadingInput as LecturaSurtidorInput };
-export { ShiftClosureInput as CierreTurnoInput }; 
+export { CierreTurnoInput as ShiftClosureInput }; 

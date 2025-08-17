@@ -28,7 +28,7 @@ export class Tanque {
   id: string;
 
   @Field()
-  numero: string;
+  nombre: string;
 
   @Field(() => Float)
   capacidadTotal: number;
@@ -38,6 +38,9 @@ export class Tanque {
 
   @Field(() => Float)
   nivelMinimo: number;
+
+  @Field(() => Float)
+  alturaActual: number; // Altura actual del fluido en centímetros
 
   @Field(() => Float, { nullable: true })
   diametro?: number; // En metros
@@ -49,6 +52,9 @@ export class Tanque {
   tipoTanque?: string;
 
   @Field()
+  unidadMedida: string;
+
+  @Field(() => Boolean)
   activo: boolean;
 
   @Field()
@@ -63,18 +69,19 @@ export class Tanque {
   @Field()
   puntoVentaId: string;
 
-  @Field(() => Producto, { nullable: true })
-  producto?: Producto;
-
-  @Field(() => [TablaAforo], { nullable: true })
-  tablaAforo?: TablaAforo[];
-
   // Campos calculados
-  @Field(() => Float)
+  @Field(() => Float, { nullable: true })
   nivelPorcentaje?: number;
 
   @Field(() => Float, { nullable: true })
-  volumenActualPorAltura?: number; // Volumen calculado basado en la altura actual
+  volumenActualPorAltura?: number;
+
+  // Relaciones
+  @Field(() => Producto)
+  producto: Producto;
+
+  @Field(() => [TablaAforo], { nullable: true })
+  tablaAforo?: TablaAforo[];
 }
 
 @ObjectType()
@@ -90,4 +97,22 @@ export class TanqueWithStatus {
 
   @Field()
   requiereAbastecimiento: boolean;
+}
+
+@ObjectType()
+export class TanqueUpdateResponse {
+  @Field(() => Tanque)
+  tanque: Tanque;
+
+  @Field(() => Boolean)
+  success: boolean;
+
+  @Field(() => [String])
+  warnings: string[];
+
+  @Field(() => [String])
+  messages: string[];
+
+  @Field({ nullable: true })
+  status?: string; // 'NORMAL', 'WARNING', 'CRITICAL'
 } 

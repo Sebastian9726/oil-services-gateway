@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -8,13 +10,13 @@ async function main() {
 
   // 1. CREAR EMPRESAS
   console.log('🏢 Creando empresas...');
-  
+
   const empresaPrincipal = await prisma.empresa.upsert({
-    where: { rut: '12345678901' },
+    where: { rut: '9013097068' },
     update: {},
     create: {
-      rut: '12345678901',
-      razonSocial: 'Estación de Servicios Principal S.A.C.',
+      rut: '9013097068',
+      razonSocial: 'Estación de Servicios Principal Gasol',
       nombre: 'Estación Principal',
       nombreComercial: 'EsPrincipal',
       direccion: 'Av. Principal 123',
@@ -33,152 +35,70 @@ async function main() {
     },
   });
 
-  const empresaSecundaria = await prisma.empresa.upsert({
-    where: { rut: '98765432109' },
-    update: {},
-    create: {
-      rut: '98765432109',
-      razonSocial: 'Estación Norte S.R.L.',
-      nombre: 'Estación Norte',
-      nombreComercial: 'EsNorte',
-      direccion: 'Av. Norte 456',
-      ciudad: 'Lima',
-      provincia: 'Lima',
-      pais: 'Perú',
-      codigoPostal: '15002',
-      telefono: '01-345-6789',
-      telefonoMovil: '976-543-210',
-      email: 'info@estacionnorte.com',
-      sitioWeb: 'https://www.estacionnorte.com',
-      sector: 'Combustibles y Lubricantes',
-      tipoEmpresa: 'S.R.L.',
-      fechaConstitucion: new Date('2021-03-15'),
-      activo: true,
-    },
-  });
-
-  console.log('✅ Empresas creadas:', empresaPrincipal.nombre, empresaSecundaria.nombre);
-
   // 2. CREAR PUNTOS DE VENTA
   console.log('🏪 Creando puntos de venta...');
-  
-  const puntoVentaPrincipal = await prisma.puntoVenta.upsert({
-    where: { codigo: 'PV-001' },
+
+  const puntoVentaGasol1 = await prisma.puntoVenta.upsert({
+    where: { codigo: '90130970681' },
     update: {},
     create: {
-      codigo: 'PV-001',
-      nombre: 'Punto de Venta Principal',
-      descripcion: 'Punto de venta principal de la estación',
-      direccion: 'Av. Principal 123',
-      ciudad: 'Lima',
-      provincia: 'Lima',
+      codigo: '90130970681',
+      nombre: 'Gasol 1',
+      descripcion: 'Gasol 1',
+      direccion: 'FINCA LA ESTRELLA VEREDA LUZ CHIQUITA',
+      ciudad: 'La Gloria',
+      provincia: 'Cesar',
       pais: 'Perú',
-      codigoPostal: '15001',
-      telefono: '01-234-5678',
-      telefonoMovil: '987-654-321',
+      codigoPostal: '203041',
+      telefono: '3107646380',
+      telefonoMovil: '3107646380',
       email: 'ventas@estacionprincipal.com',
-      horarioApertura: '06:00',
-      horarioCierre: '23:00',
+      horarioApertura: '',
+      horarioCierre: '',
       diasAtencion: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
-      coordenadasGPS: '-12.0464,-77.0428',
+      coordenadasGPS: '8.6182682, -73.0695801',
       tipoEstacion: 'urbana',
-      serviciosAdicionales: ['tienda', 'lavado', 'aire_agua'],
-      capacidadMaxima: 50000,
-      fechaApertura: new Date('2020-01-15'),
+      serviciosAdicionales: ['tienda'],
+      capacidadMaxima: 10000,
+      fechaApertura: new Date('2023-01-15'),
       activo: true,
       empresaId: empresaPrincipal.id,
     },
   });
 
-  const puntoVentaNorte = await prisma.puntoVenta.upsert({
-    where: { codigo: 'PV-002' },
+  const puntoVentaGasol2 = await prisma.puntoVenta.upsert({
+    where: { codigo: '90130970683' },
     update: {},
     create: {
-      codigo: 'PV-002',
-      nombre: 'Punto de Venta Norte',
-      descripcion: 'Sucursal zona norte',
-      direccion: 'Av. Norte 456',
-      ciudad: 'Lima',
-      provincia: 'Lima',
+      codigo: '90130970683',
+      nombre: 'Gasol 2',
+      descripcion: 'Gasol 2',
+      direccion: 'FINCA LA ESTRELLA VEREDA LUZ CHIQUITA',
+      ciudad: 'La Gloria',
+      provincia: 'Cesar',
       pais: 'Perú',
-      codigoPostal: '15002',
-      telefono: '01-345-6789',
-      telefonoMovil: '976-543-210',
-      email: 'norte@estacionprincipal.com',
-      horarioApertura: '05:30',
-      horarioCierre: '22:30',
+      codigoPostal: '203041',
+      telefono: '3107646380',
+      telefonoMovil: '3107646380',
+      email: 'ventas@estacionprincipal.com',
+      horarioApertura: '',
+      horarioCierre: '',
       diasAtencion: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
-      coordenadasGPS: '-12.0234,-77.0567',
-      tipoEstacion: 'carretera',
-      serviciosAdicionales: ['tienda', 'restaurante', 'estacionamiento'],
-      capacidadMaxima: 40000,
-      fechaApertura: new Date('2020-06-01'),
-      activo: true,
-      empresaId: empresaPrincipal.id,
-    },
-  });
-
-  const puntoVentaSur = await prisma.puntoVenta.upsert({
-    where: { codigo: 'PV-003' },
-    update: {},
-    create: {
-      codigo: 'PV-003',
-      nombre: 'Punto de Venta Sur',
-      descripcion: 'Sucursal zona sur',
-      direccion: 'Av. Sur 789',
-      ciudad: 'Lima',
-      provincia: 'Lima',
-      pais: 'Perú',
-      codigoPostal: '15003',
-      telefono: '01-456-7890',
-      telefonoMovil: '965-432-109',
-      email: 'sur@estacionprincipal.com',
-      horarioApertura: '06:00',
-      horarioCierre: '23:30',
-      diasAtencion: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
-      coordenadasGPS: '-12.0634,-77.0328',
+      coordenadasGPS: '8.6182682, -73.0695801',
       tipoEstacion: 'urbana',
-      serviciosAdicionales: ['tienda', 'lavado', 'aire_agua', 'cajero'],
-      capacidadMaxima: 45000,
-      fechaApertura: new Date('2020-09-15'),
+      serviciosAdicionales: ['tienda'],
+      capacidadMaxima: 10000,
+      fechaApertura: new Date('2023-01-15'),
       activo: true,
       empresaId: empresaPrincipal.id,
     },
   });
 
-  const puntoVentaIndependiente = await prisma.puntoVenta.upsert({
-    where: { codigo: 'PV-004' },
-    update: {},
-    create: {
-      codigo: 'PV-004',
-      nombre: 'Estación Norte Independiente',
-      descripcion: 'Punto de venta de empresa independiente',
-      direccion: 'Av. Independencia 321',
-      ciudad: 'Lima',
-      provincia: 'Lima',
-      pais: 'Perú',
-      codigoPostal: '15004',
-      telefono: '01-567-8901',
-      telefonoMovil: '954-321-098',
-      email: 'ventas@estacionnorte.com',
-      horarioApertura: '05:00',
-      horarioCierre: '24:00',
-      diasAtencion: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
-      coordenadasGPS: '-12.0134,-77.0667',
-      tipoEstacion: 'carretera',
-      serviciosAdicionales: ['tienda', 'restaurante', 'estacionamiento', 'taller'],
-      capacidadMaxima: 35000,
-      fechaApertura: new Date('2021-04-01'),
-      activo: true,
-      empresaId: empresaSecundaria.id,
-    },
-  });
-
-  console.log('✅ Puntos de venta creados:', puntoVentaPrincipal.nombre, puntoVentaNorte.nombre, puntoVentaSur.nombre, puntoVentaIndependiente.nombre);
+  console.log('✅ Puntos de venta creados:', puntoVentaGasol1.nombre, puntoVentaGasol2.nombre);
 
   // 3. CREAR ROLES
   console.log('👔 Creando roles...');
-  
+
   const adminRole = await prisma.rol.upsert({
     where: { nombre: 'admin' },
     update: {},
@@ -227,11 +147,11 @@ async function main() {
 
   // 4. CREAR USUARIOS CON DIFERENTES RELACIONES
   console.log('👤 Creando usuarios con diferentes relaciones...');
-  
+
   const hashedPassword = await bcrypt.hash('admin123', 12);
   const managerHashedPassword = await bcrypt.hash('manager123', 12);
   const employeeHashedPassword = await bcrypt.hash('empleado123', 12);
-  
+
   // Admin con acceso a todos los puntos de venta de la empresa principal
   const adminUser = await prisma.usuario.upsert({
     where: { email: 'admin@estacion.com' },
@@ -239,9 +159,8 @@ async function main() {
       empresaId: empresaPrincipal.id,
       puntosVenta: {
         set: [
-          { id: puntoVentaPrincipal.id },
-          { id: puntoVentaNorte.id },
-          { id: puntoVentaSur.id }
+          { id: puntoVentaGasol1.id },
+          { id: puntoVentaGasol2.id },
         ]
       },
     },
@@ -257,9 +176,8 @@ async function main() {
       empresaId: empresaPrincipal.id,
       puntosVenta: {
         connect: [
-          { id: puntoVentaPrincipal.id },
-          { id: puntoVentaNorte.id },
-          { id: puntoVentaSur.id }
+          { id: puntoVentaGasol1.id },
+          { id: puntoVentaGasol2.id },
         ]
       },
     },
@@ -272,8 +190,8 @@ async function main() {
       empresaId: empresaPrincipal.id,
       puntosVenta: {
         set: [
-          { id: puntoVentaPrincipal.id },
-          { id: puntoVentaNorte.id }
+          { id: puntoVentaGasol1.id },
+          { id: puntoVentaGasol2.id }
         ]
       },
     },
@@ -289,8 +207,8 @@ async function main() {
       empresaId: empresaPrincipal.id,
       puntosVenta: {
         connect: [
-          { id: puntoVentaPrincipal.id },
-          { id: puntoVentaNorte.id }
+          { id: puntoVentaGasol1.id },
+          { id: puntoVentaGasol2.id }
         ]
       },
     },
@@ -303,8 +221,8 @@ async function main() {
       empresaId: empresaPrincipal.id,
       puntosVenta: {
         set: [
-          { id: puntoVentaNorte.id },
-          { id: puntoVentaSur.id }
+          { id: puntoVentaGasol1.id },
+          { id: puntoVentaGasol2.id }
         ]
       },
     },
@@ -320,8 +238,8 @@ async function main() {
       empresaId: empresaPrincipal.id,
       puntosVenta: {
         connect: [
-          { id: puntoVentaNorte.id },
-          { id: puntoVentaSur.id }
+          { id: puntoVentaGasol1.id },
+          { id: puntoVentaGasol2.id }
         ]
       },
     },
@@ -333,7 +251,7 @@ async function main() {
     update: {
       empresaId: empresaPrincipal.id,
       puntosVenta: {
-        set: [{ id: puntoVentaPrincipal.id }]
+        set: [{ id: puntoVentaGasol1.id }]
       },
     },
     create: {
@@ -347,7 +265,7 @@ async function main() {
       rolId: employeeRole.id,
       empresaId: empresaPrincipal.id,
       puntosVenta: {
-        connect: [{ id: puntoVentaPrincipal.id }]
+        connect: [{ id: puntoVentaGasol1.id }, { id: puntoVentaGasol2.id }]
       },
     },
   });
@@ -358,7 +276,7 @@ async function main() {
     update: {
       empresaId: empresaPrincipal.id,
       puntosVenta: {
-        set: [{ id: puntoVentaNorte.id }]
+        set: [{ id: puntoVentaGasol1.id }, { id: puntoVentaGasol2.id }]
       },
     },
     create: {
@@ -372,66 +290,17 @@ async function main() {
       rolId: employeeRole.id,
       empresaId: empresaPrincipal.id,
       puntosVenta: {
-        connect: [{ id: puntoVentaNorte.id }]
+        connect: [{ id: puntoVentaGasol1.id }, { id: puntoVentaGasol2.id }]
       },
     },
   });
 
-  // Empleado solo del punto de venta sur
-  const empleadoSur = await prisma.usuario.upsert({
-    where: { email: 'empleado.sur@estacion.com' },
-    update: {
-      empresaId: empresaPrincipal.id,
-      puntosVenta: {
-        set: [{ id: puntoVentaSur.id }]
-      },
-    },
-    create: {
-      email: 'empleado.sur@estacion.com',
-      username: 'empleado_sur',
-      password: employeeHashedPassword,
-      nombre: 'Luis',
-      apellido: 'Martínez',
-      telefono: '943210987',
-      emailVerified: true,
-      rolId: employeeRole.id,
-      empresaId: empresaPrincipal.id,
-      puntosVenta: {
-        connect: [{ id: puntoVentaSur.id }]
-      },
-    },
-  });
-
-  // Gerente de empresa independiente
-  const gerenteIndependiente = await prisma.usuario.upsert({
-    where: { email: 'gerente@estacionnorte.com' },
-    update: {
-      empresaId: empresaSecundaria.id,
-      puntosVenta: {
-        set: [{ id: puntoVentaIndependiente.id }]
-      },
-    },
-    create: {
-      email: 'gerente@estacionnorte.com',
-      username: 'gerente_independiente',
-      password: managerHashedPassword,
-      nombre: 'Roberto',
-      apellido: 'Silva',
-      telefono: '932109876',
-      emailVerified: true,
-      rolId: managerRole.id,
-      empresaId: empresaSecundaria.id,
-      puntosVenta: {
-        connect: [{ id: puntoVentaIndependiente.id }]
-      },
-    },
-  });
 
   console.log('✅ Usuarios creados con diferentes relaciones empresa-puntos de venta');
 
   // 5. CREAR CATEGORÍAS
   console.log('📦 Creando categorías de productos...');
-  
+
   const combustibleCategory = await prisma.categoria.upsert({
     where: { nombre: 'Combustibles' },
     update: {},
@@ -459,11 +328,20 @@ async function main() {
     },
   });
 
+  const aditivosCategory = await prisma.categoria.upsert({
+    where: { nombre: 'Aditivos' },
+    update: {},
+    create: {
+      nombre: 'Aditivos',
+      descripcion: 'Aditivos para combustibles y mantenimiento vehicular',
+    },
+  });
+
   console.log('✅ Categorías creadas');
 
   // 6. CREAR PRODUCTOS
   console.log('🛢️ Creando productos...');
-  
+
   const gasolina95 = await prisma.producto.upsert({
     where: { codigo: 'GASOL-95' },
     update: {},
@@ -536,118 +414,560 @@ async function main() {
     },
   });
 
-  console.log('✅ Productos creados');
+  // PRODUCTOS DE TIENDA
+  console.log('🏪 Creando productos de tienda...');
+
+  const cocaCola350 = await prisma.producto.upsert({
+    where: { codigo: 'COCA-350' },
+    update: {},
+    create: {
+      codigo: 'COCA-350',
+      nombre: 'Coca Cola 350ml',
+      descripcion: 'Bebida gaseosa Coca Cola presentación 350ml',
+      unidadMedida: 'Unidades',
+      precioCompra: 2500,  // Precio de compra en COP
+      precioVenta: 4000,   // Precio de venta en COP
+      moneda: 'COP',
+      stockMinimo: 50,
+      stockActual: 120,    // Stock inicial
+      esCombustible: false,
+      categoriaId: tiendaCategory.id,
+    },
+  });
+
+  const agua600 = await prisma.producto.upsert({
+    where: { codigo: 'AGUA-600' },
+    update: {},
+    create: {
+      codigo: 'AGUA-600',
+      nombre: 'Agua Natural 600ml',
+      descripcion: 'Agua purificada embotellada 600ml',
+      unidadMedida: 'Unidades',
+      precioCompra: 1200,  // Precio de compra en COP
+      precioVenta: 2500,   // Precio de venta en COP
+      moneda: 'COP',
+      stockMinimo: 100,
+      stockActual: 200,    // Stock inicial
+      esCombustible: false,
+      categoriaId: tiendaCategory.id,
+    },
+  });
+
+  const jugoPiña = await prisma.producto.upsert({
+    where: { codigo: 'JUGO-PINA-250' },
+    update: {},
+    create: {
+      codigo: 'JUGO-PINA-250',
+      nombre: 'Jugo de Piña 250ml',
+      descripcion: 'Jugo natural de piña presentación 250ml',
+      unidadMedida: 'Unidades',
+      precioCompra: 1800,
+      precioVenta: 3200,
+      moneda: 'COP',
+      stockMinimo: 30,
+      stockActual: 80,
+      esCombustible: false,
+      categoriaId: tiendaCategory.id,
+    },
+  });
+
+  const galletas = await prisma.producto.upsert({
+    where: { codigo: 'GALLETAS-CHOCO' },
+    update: {},
+    create: {
+      codigo: 'GALLETAS-CHOCO',
+      nombre: 'Galletas de Chocolate',
+      descripcion: 'Galletas rellenas de chocolate - paquete individual',
+      unidadMedida: 'Unidades',
+      precioCompra: 1500,
+      precioVenta: 2800,
+      moneda: 'COP',
+      stockMinimo: 40,
+      stockActual: 100,
+      esCombustible: false,
+      categoriaId: tiendaCategory.id,
+    },
+  });
+
+  // LUBRICANTES
+  console.log('🛢️ Creando lubricantes...');
+
+  const aceite20W50 = await prisma.producto.upsert({
+    where: { codigo: 'ACEITE-20W50-GAL' },
+    update: {},
+    create: {
+      codigo: 'ACEITE-20W50-GAL',
+      nombre: 'Aceite Motor 20W50 Galón',
+      descripcion: 'Aceite para motor multigrado 20W50 presentación galón',
+      unidadMedida: 'Galones',
+      precioCompra: 45000,
+      precioVenta: 65000,
+      moneda: 'COP',
+      stockMinimo: 10,
+      stockActual: 24,
+      esCombustible: false,
+      categoriaId: lubricantesCategory.id,
+    },
+  });
+
+  const aceite20W50Litro = await prisma.producto.upsert({
+    where: { codigo: 'ACEITE-20W50-1L' },
+    update: {},
+    create: {
+      codigo: 'ACEITE-20W50-1L',
+      nombre: 'Aceite Motor 20W50 1 Litro',
+      descripcion: 'Aceite para motor multigrado 20W50 presentación 1 litro',
+      unidadMedida: 'Litros',
+      precioCompra: 12000,
+      precioVenta: 18000,
+      moneda: 'COP',
+      stockMinimo: 20,
+      stockActual: 48,
+      esCombustible: false,
+      categoriaId: lubricantesCategory.id,
+    },
+  });
+
+  const aceiteDiferencial = await prisma.producto.upsert({
+    where: { codigo: 'ACEITE-DIFERENCIAL' },
+    update: {},
+    create: {
+      codigo: 'ACEITE-DIFERENCIAL',
+      nombre: 'Aceite para Diferencial 80W90',
+      descripcion: 'Aceite para diferenciales y transmisiones manuales',
+      unidadMedida: 'Litros',
+      precioCompra: 15000,
+      precioVenta: 22000,
+      moneda: 'COP',
+      stockMinimo: 15,
+      stockActual: 30,
+      esCombustible: false,
+      categoriaId: lubricantesCategory.id,
+    },
+  });
+
+  // ADITIVOS
+  console.log('⚗️ Creando aditivos...');
+
+  const aditivoGasolina = await prisma.producto.upsert({
+    where: { codigo: 'ADITIVO-GASOL' },
+    update: {},
+    create: {
+      codigo: 'ADITIVO-GASOL',
+      nombre: 'Aditivo Limpiador de Gasolina',
+      descripcion: 'Aditivo limpiador de inyectores para gasolina - 250ml',
+      unidadMedida: 'Unidades',
+      precioCompra: 8500,
+      precioVenta: 15000,
+      moneda: 'COP',
+      stockMinimo: 20,
+      stockActual: 40,
+      esCombustible: false,
+      categoriaId: aditivosCategory.id,
+    },
+  });
+
+  const aditivoDiesel = await prisma.producto.upsert({
+    where: { codigo: 'ADITIVO-DIESEL' },
+    update: {},
+    create: {
+      codigo: 'ADITIVO-DIESEL',
+      nombre: 'Aditivo Limpiador de Diesel',
+      descripcion: 'Aditivo limpiador de inyectores para diesel - 250ml',
+      unidadMedida: 'Unidades',
+      precioCompra: 9200,
+      precioVenta: 16500,
+      moneda: 'COP',
+      stockMinimo: 15,
+      stockActual: 35,
+      esCombustible: false,
+      categoriaId: aditivosCategory.id,
+    },
+  });
+
+  const selladorFugas = await prisma.producto.upsert({
+    where: { codigo: 'SELLADOR-FUGAS' },
+    update: {},
+    create: {
+      codigo: 'SELLADOR-FUGAS',
+      nombre: 'Sellador de Fugas de Aceite',
+      descripcion: 'Sellador para fugas menores de aceite del motor - 354ml',
+      unidadMedida: 'Unidades',
+      precioCompra: 12000,
+      precioVenta: 20000,
+      moneda: 'COP',
+      stockMinimo: 10,
+      stockActual: 25,
+      esCombustible: false,
+      categoriaId: aditivosCategory.id,
+    },
+  });
+
+  const limpiavidrios = await prisma.producto.upsert({
+    where: { codigo: 'LIMPIAVIDRIOS' },
+    update: {},
+    create: {
+      codigo: 'LIMPIAVIDRIOS',
+      nombre: 'Limpiavidrios Concentrado',
+      descripcion: 'Líquido limpiavidrios concentrado para dilución - 500ml',
+      unidadMedida: 'Unidades',
+      precioCompra: 3500,
+      precioVenta: 6500,
+      moneda: 'COP',
+      stockMinimo: 25,
+      stockActual: 60,
+      esCombustible: false,
+      categoriaId: aditivosCategory.id,
+    },
+  });
+
+  const refrigerante = await prisma.producto.upsert({
+    where: { codigo: 'REFRIGERANTE' },
+    update: {},
+    create: {
+      codigo: 'REFRIGERANTE',
+      nombre: 'Refrigerante Anticongelante',
+      descripcion: 'Refrigerante anticongelante para radiador - 1 galón',
+      unidadMedida: 'Galones',
+      precioCompra: 18000,
+      precioVenta: 28000,
+      moneda: 'COP',
+      stockMinimo: 12,
+      stockActual: 20,
+      esCombustible: false,
+      categoriaId: aditivosCategory.id,
+    },
+  });
+
+  console.log('✅ Productos de tienda, lubricantes y aditivos creados');
 
   // 7. CREAR TANQUES PARA CADA PUNTO DE VENTA
   console.log('⛽ Creando tanques...');
-  
+
   const tanques = [
-    // Tanques Punto de Venta Principal
-    { numero: 'T-001', puntoVentaId: puntoVentaPrincipal.id, productoId: gasolina95.id, capacidad: 15000 },
-    { numero: 'T-002', puntoVentaId: puntoVentaPrincipal.id, productoId: diesel.id, capacidad: 12000 },
-    { numero: 'T-003', puntoVentaId: puntoVentaPrincipal.id, productoId: gasolina90.id, capacidad: 18000 },
-    
-    // Tanques Punto de Venta Norte
-    { numero: 'T-004', puntoVentaId: puntoVentaNorte.id, productoId: gasolina95.id, capacidad: 12000 },
-    { numero: 'T-005', puntoVentaId: puntoVentaNorte.id, productoId: diesel.id, capacidad: 10000 },
-    { numero: 'T-006', puntoVentaId: puntoVentaNorte.id, productoId: gasolina90.id, capacidad: 15000 },
-    
-    // Tanques Punto de Venta Sur
-    { numero: 'T-007', puntoVentaId: puntoVentaSur.id, productoId: gasolina95.id, capacidad: 14000 },
-    { numero: 'T-008', puntoVentaId: puntoVentaSur.id, productoId: diesel.id, capacidad: 11000 },
-    { numero: 'T-009', puntoVentaId: puntoVentaSur.id, productoId: gasolina90.id, capacidad: 16000 },
-    
-    // Tanques Punto de Venta Independiente
-    { numero: 'T-010', puntoVentaId: puntoVentaIndependiente.id, productoId: gasolina95.id, capacidad: 10000 },
-    { numero: 'T-011', puntoVentaId: puntoVentaIndependiente.id, productoId: diesel.id, capacidad: 8000 },
+    // Tanques Punto de Venta gasol 1
+    { nombre: 'Tanque 5000G gasol 1 gasolina', puntoVentaId: puntoVentaGasol1.id, productoId: gasolina95.id, capacidad: 5000, unidadMedida: 'Galones' },
+    { nombre: 'Tanque 15000 gasol 1 diesel', puntoVentaId: puntoVentaGasol1.id, productoId: diesel.id, capacidad: 15000, unidadMedida: 'Galones' },
+  
+    // Tanques Punto de Venta gasol 2
+    { nombre: 'Tanque 5000G gasol 2 gasolina', puntoVentaId: puntoVentaGasol2.id, productoId: gasolina95.id, capacidad: 5000, unidadMedida: 'Galones' },
+    { nombre: 'Tanque 15000 gasol 2 diesel', puntoVentaId: puntoVentaGasol2.id, productoId: diesel.id, capacidad: 15000, unidadMedida: 'Galones' },
+    { nombre: 'Tanque 6500 gasol 2 hidroblue', puntoVentaId: puntoVentaGasol2.id, productoId: hidroblue.id, capacidad: 6500, unidadMedida: 'Litros' },
   ];
 
   for (const tanque of tanques) {
     await prisma.tanque.upsert({
-      where: { 
-        puntoVentaId_numero: { 
-          puntoVentaId: tanque.puntoVentaId, 
-          numero: tanque.numero 
-        } 
+      where: {
+        puntoVentaId_nombre: {
+          puntoVentaId: tanque.puntoVentaId,
+          nombre: tanque.nombre
+        }
       },
       update: {},
       create: {
-        numero: tanque.numero,
+        nombre: tanque.nombre,
         capacidadTotal: tanque.capacidad,
         nivelActual: tanque.capacidad * 0.7, // 70% lleno
         nivelMinimo: tanque.capacidad * 0.1, // 10% mínimo
         productoId: tanque.productoId,
         puntoVentaId: tanque.puntoVentaId,
+        unidadMedida: tanque.unidadMedida,
       },
     });
   }
 
+
   console.log('✅ Tanques creados');
+
+  // CREAR CARROTANQUES
+  console.log('🚛 Creando carrotanques...');
+
+  const carrotanques = [
+    { nombre: 'Carrotanque compartimiento 1 SSY683', placa: 'SSY683-C1', capacidad: 3650, unidadMedida: 'Galones', conductor: 'Juan Pérez', empresa: 'Transportes Gasol' },
+    { nombre: 'Carrotanque compartimiento 2 SSY683', placa: 'SSY683-C2', capacidad: 4250, unidadMedida: 'Galones', conductor: 'Juan Pérez', empresa: 'Transportes Gasol' },
+    { nombre: 'Carrotanque compartimiento 3 SSY683', placa: 'SSY683-C3', capacidad: 3450, unidadMedida: 'Galones', conductor: 'Juan Pérez', empresa: 'Transportes Gasol' },
+  ];
+
+  for (const carrotanque of carrotanques) {
+    await prisma.carrotanque.upsert({
+      where: { placa: carrotanque.placa },
+      update: {},
+      create: {
+        nombre: carrotanque.nombre,
+        placa: carrotanque.placa,
+        capacidadTotal: carrotanque.capacidad,
+        nivelActual: carrotanque.capacidad * 0.8, // 80% lleno
+        nivelMinimo: carrotanque.capacidad * 0.05, // 5% mínimo
+        unidadMedida: carrotanque.unidadMedida,
+        conductor: carrotanque.conductor,
+        empresa: carrotanque.empresa,
+      },
+    });
+  }
+
+  console.log('✅ Carrotanques creados');
+
+  // CREAR TABLAS DE AFORO PARA CADA TANQUE
+  console.log('📊 Creando tablas de aforo...');
+
+  // Función helper para cargar archivos JSON de aforo
+  function loadAforoData(filePath: string): Array<{altura: number, volumen: number}> {
+    try {
+      const fullPath = path.join(__dirname, '..', 'tablas aforo gasol', filePath);
+      const fileContent = fs.readFileSync(fullPath, 'utf8');
+      
+      // Algunos archivos tienen formato diferente (sin comillas en las propiedades)
+      // Intentar parsear directamente primero, si falla, limpiar el formato
+      try {
+        return JSON.parse(fileContent);
+      } catch {
+        // Limpiar formato de archivos sin comillas
+        const cleanedContent = fileContent
+          .replace(/\{altura:/g, '{"altura":')
+          .replace(/,volumen:/g, ',"volumen":')
+          .replace(/\}/g, '}');
+        return JSON.parse(cleanedContent);
+      }
+    } catch (error) {
+      console.warn(`⚠️ No se pudo cargar el archivo de aforo: ${filePath}`, error);
+      return [];
+    }
+  }
+
+  // Mapeo de tanques a sus archivos de aforo correspondientes
+  const tanqueAforoMapping = [
+    {
+      tanqueNombre: 'Tanque 5000G gasol 1 gasolina',
+      aforoFile: 'gasol 1/tabla-aforo-tanque-5000gal.json'
+    },
+    {
+      tanqueNombre: 'Tanque 15000 gasol 1 diesel',
+      aforoFile: 'gasol 1/tabla-aforo-tanque-15000gal.json'
+    },
+    {
+      tanqueNombre: 'Tanque 5000G gasol 2 gasolina',
+      aforoFile: 'gasol 2/tabla-aforo-tanque-5000gal gasol 2.json'
+    },
+    {
+      tanqueNombre: 'Tanque 15000 gasol 2 diesel',
+      aforoFile: 'gasol 2/tabla-aforo-tanque-15000 gal.json'
+    },
+    {
+      tanqueNombre: 'Tanque 6500 gasol 2 hidroblue',
+      aforoFile: 'gasol 2/tabla-aforo-tanque-hidroblue.json'
+    }
+  ];
+
+  // Mapeo de carrotanques a sus archivos de aforo correspondientes
+  const carrotanqueAforoMapping = [
+    {
+      carrotanqueNombre: 'Carrotanque compartimiento 1 SSY683',
+      aforoFile: 'carrotanque/tabla-aforo-tanque-compartiminto-1.json'
+    },
+    {
+      carrotanqueNombre: 'Carrotanque compartimiento 2 SSY683',
+      aforoFile: 'carrotanque/tabla-aforo-tanque-compartiminto-2.json'
+    },
+    {
+      carrotanqueNombre: 'Carrotanque compartimiento 3 SSY683',
+      aforoFile: 'carrotanque/tabla-aforo-tanque-compartiminto-3.json'
+    }
+  ];
+
+  // Crear tablas de aforo para cada tanque
+  for (const mapping of tanqueAforoMapping) {
+    try {
+      // Buscar el tanque en la base de datos
+      const tanque = await prisma.tanque.findFirst({
+        where: { nombre: mapping.tanqueNombre }
+      });
+
+      if (!tanque) {
+        console.warn(`⚠️ No se encontró el tanque: ${mapping.tanqueNombre}`);
+        continue;
+      }
+
+      // Cargar datos de aforo
+      const aforoData = loadAforoData(mapping.aforoFile);
+      
+      if (aforoData.length === 0) {
+        console.warn(`⚠️ No se encontraron datos de aforo para: ${mapping.tanqueNombre}`);
+        continue;
+      }
+
+      console.log(`📈 Creando tabla de aforo para ${mapping.tanqueNombre} (${aforoData.length} registros)...`);
+
+      // Borrar tabla de aforo existente para este tanque (si existe)
+      await prisma.tablaAforo.deleteMany({
+        where: { tanqueId: tanque.id }
+      });
+
+      // Crear registros de aforo en lotes para mejor rendimiento
+      const batchSize = 100;
+      for (let i = 0; i < aforoData.length; i += batchSize) {
+        const batch = aforoData.slice(i, i + batchSize);
+        await prisma.tablaAforo.createMany({
+          data: batch.map(item => ({
+            altura: item.altura,
+            volumen: item.volumen,
+            tanqueId: tanque.id
+          }))
+        });
+      }
+
+      console.log(`✅ Tabla de aforo creada para ${mapping.tanqueNombre}`);
+
+    } catch (error) {
+      console.error(`❌ Error creando tabla de aforo para ${mapping.tanqueNombre}:`, error);
+    }
+  }
+
+  // Crear tablas de aforo para cada carrotanque
+  for (const mapping of carrotanqueAforoMapping) {
+    try {
+      // Buscar el carrotanque en la base de datos
+      const carrotanque = await prisma.carrotanque.findFirst({
+        where: { nombre: mapping.carrotanqueNombre }
+      });
+
+      if (!carrotanque) {
+        console.warn(`⚠️ No se encontró el carrotanque: ${mapping.carrotanqueNombre}`);
+        continue;
+      }
+
+      // Cargar datos de aforo
+      const aforoData = loadAforoData(mapping.aforoFile);
+      
+      if (aforoData.length === 0) {
+        console.warn(`⚠️ No se encontraron datos de aforo para: ${mapping.carrotanqueNombre}`);
+        continue;
+      }
+
+      console.log(`📈 Creando tabla de aforo para ${mapping.carrotanqueNombre} (${aforoData.length} registros)...`);
+
+      // Borrar tabla de aforo existente para este carrotanque (si existe)
+      await prisma.tablaAforoCarrotanque.deleteMany({
+        where: { carrotanqueId: carrotanque.id }
+      });
+
+      // Crear registros de aforo en lotes para mejor rendimiento
+      const batchSize = 100;
+      for (let i = 0; i < aforoData.length; i += batchSize) {
+        const batch = aforoData.slice(i, i + batchSize);
+        await prisma.tablaAforoCarrotanque.createMany({
+          data: batch.map(item => ({
+            altura: item.altura,
+            volumen: item.volumen,
+            carrotanqueId: carrotanque.id
+          }))
+        });
+      }
+
+      console.log(`✅ Tabla de aforo creada para ${mapping.carrotanqueNombre}`);
+
+    } catch (error) {
+      console.error(`❌ Error creando tabla de aforo para ${mapping.carrotanqueNombre}:`, error);
+    }
+  }
+
+  console.log('✅ Tablas de aforo creadas');
 
   // 8. CREAR SURTIDORES Y MANGUERAS
   console.log('🚗 Creando surtidores y mangueras...');
-  
+
   const surtidores = [
     // Surtidores Punto de Venta Principal
-    { 
-      numero: 'S-001', 
-      nombre: 'Surtidor Principal 1', 
-      puntoVentaId: puntoVentaPrincipal.id,
+    {
+      numero: 'S-001',
+      nombre: 'Surtidor Principal 1',
+      puntoVentaId: puntoVentaGasol1.id,
       mangueras: [
-        { numero: '2', color: 'Negro', productoId: diesel.id },
-        { numero: '3', color: 'Azul', productoId: gasolina90.id },
+        { numero: '1', color: 'Rojo', productoId: gasolina95.id },
+        { numero: '2', color: 'Amarillo', productoId: diesel.id },
       ]
     },
-    { 
-      numero: 'S-002', 
-      nombre: 'Surtidor Principal 2', 
-      puntoVentaId: puntoVentaPrincipal.id,
+    {
+      numero: 'S-002',
+      nombre: 'Surtidor Principal 2',
+      puntoVentaId: puntoVentaGasol1.id,
       mangueras: [
-        { numero: '2', color: 'Negro', productoId: hidroblue.id },
+        { numero: '3', color: 'Rojo', productoId: gasolina95.id },
+        { numero: '4', color: 'Amarillo', productoId: diesel.id },
       ]
     },
-    
+
     // Surtidores Punto de Venta Norte
-    { 
-      numero: 'S-003', 
-      nombre: 'Surtidor Norte 1', 
-      puntoVentaId: puntoVentaNorte.id,
+    {
+      numero: 'S-003',
+      nombre: 'Surtidor Principal 3',
+      puntoVentaId: puntoVentaGasol1.id,
       mangueras: [
-        { numero: '2', color: 'Negro', productoId: diesel.id },
-        { numero: '3', color: 'Azul', productoId: gasolina90.id },
+        { numero: '5', color: 'Rojo', productoId: gasolina95.id },
+        { numero: '6', color: 'Amarillo', productoId: diesel.id },
       ]
     },
-    
-    // Surtidores Punto de Venta Sur
-    { 
-      numero: 'S-004', 
-      nombre: 'Surtidor Sur 1', 
-      puntoVentaId: puntoVentaSur.id,
+    {
+      numero: 'S-004',
+      nombre: 'Surtidor Principal 4',
+      puntoVentaId: puntoVentaGasol1.id,
       mangueras: [
-        { numero: '1', color: 'Rojo', productoId: gasolina90.id },
-        { numero: '2', color: 'Negro', productoId: diesel.id },
+        { numero: '7', color: 'Rojo', productoId: gasolina95.id },
+        { numero: '8', color: 'Amarillo', productoId: diesel.id },
       ]
     },
-    
-    // Surtidores Punto de Venta Independiente
-    { 
-      numero: 'S-005', 
-      nombre: 'Surtidor Independiente 1', 
-      puntoVentaId: puntoVentaIndependiente.id,
+    {
+      numero: 'S-005',
+      nombre: 'Surtidor Principal 5',
+      puntoVentaId: puntoVentaGasol2.id,
       mangueras: [
-        { numero: '1', color: 'Rojo', productoId: gasolina90.id },
-        { numero: '2', color: 'Negro', productoId: diesel.id },
+        { numero: '7', color: 'Rojo', productoId: gasolina95.id },
+        { numero: '8', color: 'Amarillo', productoId: diesel.id },
+      ]
+    },
+    {
+      numero: 'S-006',
+      nombre: 'Surtidor Principal 6',
+      puntoVentaId: puntoVentaGasol2.id,
+      mangueras: [
+        { numero: '7', color: 'Rojo', productoId: gasolina95.id },
+        { numero: '8', color: 'Amarillo', productoId: diesel.id },
+      ]
+    },
+    {
+      numero: 'S-007',
+      nombre: 'Surtidor Principal 7',
+      puntoVentaId: puntoVentaGasol2.id,
+      mangueras: [
+        { numero: '7', color: 'Rojo', productoId: gasolina95.id },
+        { numero: '8', color: 'Amarillo', productoId: diesel.id },
+      ]
+    },
+    {
+      numero: 'S-008',
+      nombre: 'Surtidor Principal 8',
+      puntoVentaId: puntoVentaGasol2.id,
+      mangueras: [
+        { numero: '9', color: 'Rojo', productoId: gasolina95.id },
+        { numero: '10', color: 'Amarillo', productoId: diesel.id },
+      ]
+    },
+    { 
+      numero: 'S-009', 
+      nombre: 'Surtidor Principal 9', 
+      puntoVentaId: puntoVentaGasol2.id,
+      mangueras: [
+        { numero: '11', color: 'Azul', productoId: hidroblue.id },
       ]
     },
   ];
 
   for (const surtidor of surtidores) {
     const createdSurtidor = await prisma.surtidor.upsert({
-      where: { 
-        puntoVentaId_numero: { 
-          puntoVentaId: surtidor.puntoVentaId, 
-          numero: surtidor.numero 
-        } 
+      where: {
+        puntoVentaId_numero: {
+          puntoVentaId: surtidor.puntoVentaId,
+          numero: surtidor.numero
+        }
       },
       update: {},
       create: {
@@ -664,11 +984,11 @@ async function main() {
     // Crear mangueras para cada surtidor
     for (const manguera of surtidor.mangueras) {
       await prisma.mangueraSurtidor.upsert({
-        where: { 
-          surtidorId_numero: { 
-            surtidorId: createdSurtidor.id, 
-            numero: manguera.numero 
-          } 
+        where: {
+          surtidorId_numero: {
+            surtidorId: createdSurtidor.id,
+            numero: manguera.numero
+          }
         },
         update: {},
         create: {
@@ -687,7 +1007,7 @@ async function main() {
 
   // 9. CREAR CLIENTES DE EJEMPLO
   console.log('👥 Creando clientes de ejemplo...');
-  
+
   const clienteEjemplo = await prisma.cliente.upsert({
     where: { numeroDocumento: '12345678' },
     update: {},
@@ -720,11 +1040,11 @@ async function main() {
 
   // 10. CREAR TURNOS DE EJEMPLO
   console.log('🕐 Creando turnos de ejemplo...');
-  
+
   const ahora = new Date();
   const ayer = new Date(ahora);
   ayer.setDate(ayer.getDate() - 1);
-  
+
   const turnoActual = await prisma.turno.create({
     data: {
       fechaInicio: ahora,
@@ -734,7 +1054,7 @@ async function main() {
       observaciones: 'Turno matutino en curso',
       activo: true,
       usuarioId: empleadoPrincipal.id,
-      puntoVentaId: puntoVentaPrincipal.id,
+      puntoVentaId: puntoVentaGasol1.id,
     },
   });
 
@@ -747,7 +1067,7 @@ async function main() {
       observaciones: 'Turno matutino completado',
       activo: false,
       usuarioId: empleadoNorte.id,
-      puntoVentaId: puntoVentaNorte.id,
+      puntoVentaId: puntoVentaGasol2.id,
     },
   });
 
@@ -760,7 +1080,7 @@ async function main() {
       observaciones: 'Turno vespertino supervisión',
       activo: true,
       usuarioId: supervisorUser.id,
-      puntoVentaId: puntoVentaSur.id,
+      puntoVentaId: puntoVentaGasol2.id,
     },
   });
 
@@ -768,35 +1088,27 @@ async function main() {
 
   // 11. CREAR INVENTARIO ACTUAL
   console.log('📊 Creando inventario actual...');
-  
+
   const inventarioData = [
     // Inventario Principal
-    { puntoVentaId: puntoVentaPrincipal.id, productoId: gasolina95.id, stockActual: 5000, precio: 15900 },
-    { puntoVentaId: puntoVentaPrincipal.id, productoId: diesel.id, stockActual: 4000, precio: 14300 },
-    { puntoVentaId: puntoVentaPrincipal.id, productoId: gasolina90.id, stockActual: 6000, precio: 14990 },
-    
-    // Inventario Norte
-    { puntoVentaId: puntoVentaNorte.id, productoId: gasolina95.id, stockActual: 3500, precio: 15900 },
-    { puntoVentaId: puntoVentaNorte.id, productoId: diesel.id, stockActual: 2800, precio: 14300 },
-    { puntoVentaId: puntoVentaNorte.id, productoId: gasolina90.id, stockActual: 4200, precio: 14990 },
-    
-    // Inventario Sur
-    { puntoVentaId: puntoVentaSur.id, productoId: gasolina95.id, stockActual: 4200, precio: 15900 },
-    { puntoVentaId: puntoVentaSur.id, productoId: diesel.id, stockActual: 3200, precio: 14300 },
-    { puntoVentaId: puntoVentaSur.id, productoId: gasolina90.id, stockActual: 5000, precio: 14990 },
-    
-    // Inventario Independiente
-    { puntoVentaId: puntoVentaIndependiente.id, productoId: gasolina95.id, stockActual: 2800, precio: 15900 },
-    { puntoVentaId: puntoVentaIndependiente.id, productoId: diesel.id, stockActual: 2200, precio: 14300 },
+    { puntoVentaId: puntoVentaGasol1.id, productoId: gasolina95.id, stockActual: 5000, precio: 15900 },
+    { puntoVentaId: puntoVentaGasol1.id, productoId: diesel.id, stockActual: 4000, precio: 14300 },
+    { puntoVentaId: puntoVentaGasol1.id, productoId: gasolina90.id, stockActual: 6000, precio: 14990 },
+
+    // Inventario Gasol 2
+    { puntoVentaId: puntoVentaGasol2.id, productoId: gasolina95.id, stockActual: 3500, precio: 15900 },
+    { puntoVentaId: puntoVentaGasol2.id, productoId: diesel.id, stockActual: 2800, precio: 14300 },
+    { puntoVentaId: puntoVentaGasol2.id, productoId: gasolina90.id, stockActual: 4200, precio: 14990 },
+    { puntoVentaId: puntoVentaGasol2.id, productoId: hidroblue.id, stockActual: 200, precio: 7500 },
   ];
 
   for (const inventario of inventarioData) {
     await prisma.inventarioActual.upsert({
-      where: { 
-        puntoVentaId_productoId: { 
-          puntoVentaId: inventario.puntoVentaId, 
-          productoId: inventario.productoId 
-        } 
+      where: {
+        puntoVentaId_productoId: {
+          puntoVentaId: inventario.puntoVentaId,
+          productoId: inventario.productoId
+        }
       },
       update: {},
       create: {
@@ -813,13 +1125,33 @@ async function main() {
 
   console.log('\n🎉 Seed completo ejecutado exitosamente!');
   console.log('\n📋 RESUMEN DE DATOS CREADOS:');
-  console.log(`🏢 Empresas: ${empresaPrincipal.nombre}, ${empresaSecundaria.nombre}`);
-  console.log(`🏪 Puntos de Venta: 4 (PV-001, PV-002, PV-003, PV-004)`);
-  console.log(`👥 Usuarios: 7 con diferentes roles y relaciones`);
-  console.log(`⛽ Tanques: 11 distribuidos en todos los puntos de venta`);
-  console.log(`🚗 Surtidores: 5 con múltiples mangueras`);
-  console.log(`🕐 Turnos: 3 de ejemplo (1 activo, 1 completado, 1 supervisión)`);
-  console.log(`📊 Inventario: Configurado para todos los puntos de venta`);
+  console.log(`🏢 Empresas: ${empresaPrincipal.nombre}`);
+  console.log(`🏪 Puntos de Venta: 2 (Gasol 1, Gasol 2)`);
+  console.log(`👥 Usuarios: 5 con diferentes roles y relaciones`);
+  console.log(`📦 Categorías: 4 (Combustibles, Lubricantes, Tienda, Aditivos)`);
+  console.log(`🛍️ Productos: 17 productos creados`);
+  console.log(`   - 4 Combustibles (Gasolina 95, Gasolina 90, Diesel, Hidroblue)`);
+  console.log(`   - 4 Productos de Tienda (Coca Cola, Agua, Jugo de Piña, Galletas)`);
+  console.log(`   - 3 Lubricantes (Aceite 20W50 Galón, Aceite 20W50 1L, Aceite Diferencial)`);
+  console.log(`   - 6 Aditivos (Limpiador Gasolina, Limpiador Diesel, Sellador Fugas, Limpiavidrios, Refrigerante)`);
+  console.log(`⛽ Tanques: 5 distribuidos en todos los puntos de venta`);
+  console.log(`🚛 Carrotanques: 3 con placas SSY683-C1, SSY683-C2, SSY683-C3`);
+  console.log(`📊 Tablas de Aforo: Configuradas para todos los tanques y carrotanques`);
+  console.log(`🚗 Surtidores: 9 con múltiples mangueras`);
+  console.log(`🕐 Turnos: 3 de ejemplo (2 activos, 1 completado)`);
+  console.log(`📈 Inventario: Configurado para todos los puntos de venta`);
+
+  console.log('\n💰 EJEMPLOS DE PRECIOS (COP):');
+  console.log('🏪 Tienda:');
+  console.log('   - Coca Cola 350ml: $2,500 → $4,000 (60% ganancia)');
+  console.log('   - Agua 600ml: $1,200 → $2,500 (108% ganancia)');
+  console.log('   - Jugo de Piña: $1,800 → $3,200 (78% ganancia)');
+  console.log('🛢️ Lubricantes:');
+  console.log('   - Aceite 20W50 Galón: $45,000 → $65,000 (44% ganancia)');
+  console.log('   - Aceite 20W50 1L: $12,000 → $18,000 (50% ganancia)');
+  console.log('⚗️ Aditivos:');
+  console.log('   - Limpiador Gasolina: $8,500 → $15,000 (76% ganancia)');
+  console.log('   - Refrigerante: $18,000 → $28,000 (56% ganancia)');
 
   console.log('\n🔑 CREDENCIALES DE ACCESO:');
   console.log('📧 Admin: admin@estacion.com | 🔑 Contraseña: admin123');
@@ -827,8 +1159,6 @@ async function main() {
   console.log('📧 Supervisor: supervisor@estacion.com | 🔑 Contraseña: admin123');
   console.log('📧 Empleado Principal: empleado.principal@estacion.com | 🔑 Contraseña: empleado123');
   console.log('📧 Empleado Norte: empleado.norte@estacion.com | 🔑 Contraseña: empleado123');
-  console.log('📧 Empleado Sur: empleado.sur@estacion.com | 🔑 Contraseña: empleado123');
-  console.log('📧 Gerente Independiente: gerente@estacionnorte.com | 🔑 Contraseña: manager123');
 }
 
 main()

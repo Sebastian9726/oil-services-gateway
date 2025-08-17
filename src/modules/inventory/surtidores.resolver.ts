@@ -361,9 +361,9 @@ export class SurtidoresResolver {
             10000 // Obtener todos los registros
           );
 
-          // Los datos están en litros, convertir a galones como primario
-          const totalLitros = historial.historial.reduce((sum, h) => sum + h.cantidadVendida, 0);
-          const totalGalones = Math.round(totalLitros * LITROS_TO_GALONES * 100) / 100;
+          // Los datos están en galones, convertir a litros
+          const totalGalones = historial.historial.reduce((sum, h) => sum + h.cantidadVendida, 0);
+          const totalLitros = Math.round(totalGalones / LITROS_TO_GALONES * 100) / 100;
           const totalValor = historial.historial.reduce((sum, h) => sum + h.valorVenta, 0);
 
           console.log(`[CONSOLIDADO] Manguera ${surtidor.numero}-${manguera.numero}: ${historial.historial.length} registros, ${totalGalones} gal (${totalLitros}L), $${totalValor}`);
@@ -383,8 +383,8 @@ export class SurtidoresResolver {
             },
             ultimaVenta: historial.historial[0] ? {
               fecha: historial.historial[0].fechaLectura,
-              galones: Math.round(historial.historial[0].cantidadVendida * LITROS_TO_GALONES * 100) / 100,
-              litros: historial.historial[0].cantidadVendida,
+              galones: historial.historial[0].cantidadVendida,
+              litros: Math.round(historial.historial[0].cantidadVendida / LITROS_TO_GALONES * 100) / 100,
               valor: historial.historial[0].valorVenta,
             } : null,
           });

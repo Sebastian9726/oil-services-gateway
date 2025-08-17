@@ -1,11 +1,10 @@
-import { InputType, Field, ID, PartialType, Float } from '@nestjs/graphql';
-import { IsString, IsOptional, IsNumber, IsBoolean, Min } from 'class-validator';
 import { CreateTanqueInput } from './create-tanque.input';
+import { InputType, Field, PartialType, ID } from '@nestjs/graphql';
+import { IsOptional, IsString, IsIn } from 'class-validator';
 
 @InputType()
 export class UpdateTanqueInput extends PartialType(CreateTanqueInput) {
   @Field(() => ID)
-  @IsString()
   id: string;
 
   @Field({ nullable: true })
@@ -13,34 +12,28 @@ export class UpdateTanqueInput extends PartialType(CreateTanqueInput) {
   @IsString()
   numero?: string;
 
-  @Field(() => Float, { nullable: true })
+  @Field({ nullable: true })
   @IsOptional()
-  @IsNumber({}, { message: 'La capacidad total debe ser un número' })
-  @Min(0, { message: 'La capacidad total debe ser mayor a 0' })
   capacidadTotal?: number;
 
-  @Field(() => Float, { nullable: true })
+  @Field({ nullable: true })
   @IsOptional()
-  @IsNumber({}, { message: 'El nivel actual debe ser un número' })
-  @Min(0, { message: 'El nivel actual debe ser mayor o igual a 0' })
   nivelActual?: number;
 
-  @Field(() => Float, { nullable: true })
+  @Field({ nullable: true })
   @IsOptional()
-  @IsNumber({}, { message: 'El nivel mínimo debe ser un número' })
-  @Min(0, { message: 'El nivel mínimo debe ser mayor o igual a 0' })
   nivelMinimo?: number;
 
-  @Field(() => Float, { nullable: true })
+  @Field({ nullable: true })
   @IsOptional()
-  @IsNumber({}, { message: 'El diámetro debe ser un número' })
-  @Min(0, { message: 'El diámetro debe ser mayor a 0' })
+  alturaActual?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
   diametro?: number;
 
-  @Field(() => Float, { nullable: true })
+  @Field({ nullable: true })
   @IsOptional()
-  @IsNumber({}, { message: 'La altura máxima debe ser un número' })
-  @Min(0, { message: 'La altura máxima debe ser mayor a 0' })
   alturaMaxima?: number;
 
   @Field({ nullable: true })
@@ -50,7 +43,12 @@ export class UpdateTanqueInput extends PartialType(CreateTanqueInput) {
 
   @Field({ nullable: true })
   @IsOptional()
-  @IsBoolean()
+  @IsString()
+  @IsIn(['LITROS', 'GALONES'], { message: 'La unidad de medida debe ser LITROS o GALONES' })
+  unidadMedida?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
   activo?: boolean;
 
   @Field({ nullable: true })

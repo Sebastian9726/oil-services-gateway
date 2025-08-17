@@ -9,6 +9,9 @@ import { SurtidoresService } from './surtidores.service';
 import { SurtidoresResolver } from './surtidores.resolver';
 import { TanquesService } from './tanques.service';
 import { TanquesResolver } from './tanques.resolver';
+import { CarrotanquesService } from './carrotanques.service';
+import { CarrotanquesResolver } from './carrotanques.resolver';
+import { MetodosPagoResolver } from './metodos-pago.resolver';
 
 @Module({
   providers: [
@@ -22,7 +25,10 @@ import { TanquesResolver } from './tanques.resolver';
     SurtidoresResolver,
     TanquesService,
     TanquesResolver,
+    CarrotanquesService,
+    CarrotanquesResolver,
+    MetodosPagoResolver,
   ],
-  exports: [InventoryService, ProductsService, CategoriesService, SurtidoresService, TanquesService],
+  exports: [InventoryService, ProductsService, CategoriesService, SurtidoresService, TanquesService, CarrotanquesService],
 })
 export class InventoryModule {} 

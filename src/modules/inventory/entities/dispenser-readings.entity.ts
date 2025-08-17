@@ -1,4 +1,5 @@
 import { ObjectType, Field, ID, Float, Int, InputType } from '@nestjs/graphql';
+import { ResumenTanques } from './shift-closure.entity';
 
 @InputType()
 export class HoseReadingInput {
@@ -142,6 +143,9 @@ export class ResumenFinancieroTurno {
 export class InventoryUpdateResponse {
   @Field(() => [DispenserSummary])
   resumenSurtidores: DispenserSummary[];
+
+  @Field(() => ResumenTanques, { nullable: true })
+  resumenTanques?: ResumenTanques;
 
   @Field(() => Float)
   totalGeneralLitros: number;

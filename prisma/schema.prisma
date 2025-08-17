@@ -246,13 +246,15 @@ model Producto {
 
 model Tanque {
   id                 String              @id @default(cuid())
-  numero             String
+  nombre             String
   capacidadTotal     Decimal             @db.Decimal(10, 2)
   nivelActual        Decimal             @default(0) @db.Decimal(10, 2)
   nivelMinimo        Decimal             @default(0) @db.Decimal(10, 2)
+  alturaActual       Decimal             @default(0) @db.Decimal(8, 3) // Altura actual del fluido en centímetros
   diametro           Decimal?            @db.Decimal(8, 3) // En metros
   alturaMaxima       Decimal?            @db.Decimal(8, 3) // En metros  
   tipoTanque         String?             // Cilíndrico, rectangular, etc.
+  unidadMedida       String              @default("GALONES") // LITROS o GALONES
   activo             Boolean             @default(true)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -263,7 +265,7 @@ model Tanque {
   producto           Producto            @relation(fields: [productoId], references: [id])
   puntoVenta         PuntoVenta          @relation(fields: [puntoVentaId], references: [id])
 
-  @@unique([puntoVentaId, numero])
+  @@unique([puntoVentaId, nombre])
   @@map("tanques")
   @@schema("inventario")
 }
@@ -278,6 +280,7 @@ model TablaAforo {
   tanque     Tanque  @relation(fields: [tanqueId], references: [id], onDelete: Cascade)
 
   @@unique([tanqueId, altura])
+  @@index([tanqueId, altura])  // Cubre tanto búsquedas exactas como de rango
   @@map("tabla_aforo")
   @@schema("inventario")
 }
@@ -445,4 +448,43 @@ model InventarioActual {
   @@unique([puntoVentaId, productoId])
   @@map("inventario_actual")
   @@schema("reportes")
+}
+
+model Carrotanque {
+  id                 String              @id @default(cuid())
+  nombre             String
+  placa              String              @unique // Placa del vehículo
+  capacidadTotal     Decimal             @db.Decimal(10, 2)
+  nivelActual        Decimal             @default(0) @db.Decimal(10, 2)
+  nivelMinimo        Decimal             @default(0) @db.Decimal(10, 2)
+  alturaActual       Decimal             @default(0) @db.Decimal(8, 3) // Altura actual del fluido en centímetros
+  diametro           Decimal?            @db.Decimal(8, 3) // En metros
+  alturaMaxima       Decimal?            @db.Decimal(8, 3) // En metros  
+  tipoCarrotanque    String?             // Tipo de carrotanque
+  unidadMedida       String              @default("GALONES") // LITROS o GALONES
+  activo             Boolean             @default(true)
+  conductor          String?             // Nombre del conductor
+  empresa            String?             // Empresa transportista
+  observaciones      String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  tablaAforo         TablaAforoCarrotanque[]
+
+  @@map("carrotanques")
+  @@schema("inventario")
+}
+
+model TablaAforoCarrotanque {
+  id            String      @id @default(cuid())
+  altura        Decimal     @db.Decimal(8, 3) // Altura en centímetros
+  volumen       Decimal     @db.Decimal(12, 2) // Volumen en litros
+  carrotanqueId String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  carrotanque   Carrotanque @relation(fields: [carrotanqueId], references: [id], onDelete: Cascade)
+
+  @@unique([carrotanqueId, altura])
+  @@index([carrotanqueId, altura])
+  @@map("tabla_aforo_carrotanque")
+  @@schema("inventario")
 }

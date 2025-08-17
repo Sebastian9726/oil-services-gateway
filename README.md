@@ -386,3 +386,161 @@ Para soporte técnico o consultas sobre el proyecto, contacta al equipo de desar
 
 **Oil Services Gateway** - MVP para gestión integral de estaciones de servicios
 Desarrollado con ❤️ usando NestJS, GraphQL y Prisma
+
+# Oil Services Gateway - Gestión de Estaciones de Servicio
+
+## Mutation: processShiftClosure
+
+El mutation `processShiftClosure` ahora incluye la capacidad de registrar la cantidad total de ventas realizadas durante el turno.
+
+### Ejemplo de uso con estadísticas de ventas:
+
+```graphql
+mutation ProcessShiftClosure {
+  processShiftClosure(cierreTurnoInput: {
+    lecturasSurtidores: [
+      {
+        numeroSurtidor: "S-003"
+        mangueras: [
+          {
+            numeroManguera: "5"
+            codigoProducto: "GASOL-95"
+            lecturaAnterior: 34773
+            lecturaActual: 34774
+            unidadMedida: "galones"
+          }
+          {
+            numeroManguera: "6"
+            codigoProducto: "DIESEL"
+            lecturaAnterior: 40300
+            lecturaActual: 40303
+            unidadMedida: "galones"
+          }
+        ]
+      }
+    ]
+    
+    # Lecturas de tanques
+    lecturasTanques: [
+      {
+        tanqueId: "cme9dgkno000xuhbvvec6vgbz"
+        nombreTanque: "T-001"
+        alturaFluido: 120
+      }
+    ]
+    
+    # Ventas de productos de tienda
+    ventasProductos: [
+      {
+        codigoProducto: "COCA-350"
+        cantidad: 5
+        unidadMedida: "unidades"
+        precioUnitario: 2500
+        valorTotal: 12500
+        observaciones: "Coca Cola 350ml"
+      }
+    ]
+    
+    # *** NUEVO CAMPO: Cantidad total de ventas realizadas ***
+    cantidadVentasRealizadas: 30
+    
+    observacionesGenerales: "Cierre de turno con 30 ventas totales"
+    puntoVentaId: "cme9dgjvn0002uhbvd3l50c0e"
+    startTime: "2025-08-13 20:51:00.000"
+    finishTime: "2025-08-13 22:51:00.000"
+    
+    resumenVentas: {
+      totalVentasTurno: 15
+      metodosPago: [
+        {
+          metodoPago: "EFECTIVO"
+          monto: 225700
+          observaciones: "Efectivo - $ 225.700,00"
+        }
+      ]
+      observaciones: "Cierre de turno con 30 ventas totales"
+    }
+  }) {
+    # Campos básicos
+    totalGeneralLitros
+    totalGeneralGalones
+    valorTotalGeneral
+    fechaProceso
+    turnoId
+    productosActualizados
+    estado
+    errores
+    advertencias
+    
+    # *** NUEVOS CAMPOS: Estadísticas de ventas ***
+    cantidadVentasDeclaradas
+    cantidadVentasCalculadas
+    
+    estadisticasVentas {
+      cantidadVentasDeclaradas
+      cantidadVentasCalculadas
+      ventasCombustibles
+      ventasProductos
+      promedioVentaPorTransaccion
+      observaciones
+    }
+    
+    # Otros campos existentes
+    resumenSurtidores {
+      numeroSurtidor
+      totalVentasLitros
+      totalVentasGalones
+      valorTotalSurtidor
+      observaciones
+      ventas {
+        codigoProducto
+        nombreProducto
+        cantidadVendidaGalones
+        cantidadVendidaLitros
+        valorTotalVenta
+      }
+    }
+    
+    resumenFinanciero {
+      totalDeclarado
+      totalCalculado
+      diferencia
+      metodosPago {
+        metodoPago
+        monto
+        porcentaje
+        observaciones
+      }
+    }
+  }
+}
+```
+
+### Explicación de las nuevas funcionalidades:
+
+1. **`cantidadVentasRealizadas`** (Input): Campo opcional donde puedes indicar cuántas ventas se realizaron según tus registros (ejemplo: 30 ventas).
+
+2. **`cantidadVentasDeclaradas`** (Output): Retorna el valor que enviaste en `cantidadVentasRealizadas`.
+
+3. **`cantidadVentasCalculadas`** (Output): Número de ventas calculadas automáticamente basado en:
+   - Ventas de combustibles (una por cada manguera con venta > 0)
+   - Ventas de productos de tienda
+
+4. **`estadisticasVentas`** (Output): Objeto completo con estadísticas detalladas:
+   - `cantidadVentasDeclaradas`: Lo que declaraste
+   - `cantidadVentasCalculadas`: Lo que el sistema calculó
+   - `ventasCombustibles`: Número de ventas de combustible
+   - `ventasProductos`: Número de ventas de productos de tienda
+   - `promedioVentaPorTransaccion`: Valor promedio por venta
+   - `observaciones`: Indica si hay diferencias entre declarado vs calculado
+
+### Utilidad:
+
+- **Control de calidad**: Compara las ventas que declares vs las que el sistema calcula
+- **Detección de errores**: Si hay diferencias, el sistema te alertará
+- **Estadísticas**: Obtén métricas detalladas sobre el desempeño del turno
+- **Auditoría**: Toda la información se guarda para consultas posteriores
+
+Si declares 30 ventas pero el sistema solo detecta 25 (por ejemplo, 20 de combustible + 5 de productos), recibirás una advertencia sobre la diferencia.
+
+---
