@@ -6,6 +6,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   constructor() {
     super({
       log: ['query', 'info', 'warn', 'error'],
+      transactionOptions: {
+        timeout: 60000 * 10, // 60 segundos para debugging (default es 5000ms)
+        maxWait: 10000, // Máximo tiempo de espera para obtener una conexión
+        isolationLevel: 'ReadCommitted', // Nivel de aislamiento
+      },
     });
   }
 

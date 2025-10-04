@@ -544,3 +544,455 @@ mutation ProcessShiftClosure {
 Si declares 30 ventas pero el sistema solo detecta 25 (por ejemplo, 20 de combustible + 5 de productos), recibirás una advertencia sobre la diferencia.
 
 ---
+
+## Mutation: processShiftClosure con Métodos de Pago por Producto
+
+El mutation `processShiftClosure` ahora soporta métodos de pago específicos para cada producto, permitiendo un control detallado de cómo se pagó cada venta.
+
+### Ejemplo de uso con métodos de pago por producto:
+
+```graphql
+mutation ProcessShiftClosure {
+  processShiftClosure(cierreTurnoInput: {
+    lecturasSurtidores: [
+      {
+        numeroSurtidor: "S-003"
+        mangueras: [
+          {
+            numeroManguera: "5"
+            codigoProducto: "GASOL-95"
+            lecturaAnterior: 34773
+            lecturaActual: 34774
+            unidadMedida: "galones"
+            # *** NUEVO: Métodos de pago específicos para gasolina ***
+            metodosPago: [
+              {
+                metodoPago: "EFECTIVO"
+                monto: 100000
+                observaciones: "Pago en efectivo"
+              }
+              {
+                metodoPago: "RUMBO"
+                monto: 200000
+                observaciones: "Pago con tarjeta Rumbo"
+              }
+            ]
+          }
+          {
+            numeroManguera: "6"
+            codigoProducto: "DIESEL"
+            lecturaAnterior: 40300
+            lecturaActual: 40303
+            unidadMedida: "galones"
+            # *** NUEVO: Métodos de pago específicos para diesel ***
+            metodosPago: [
+              {
+                metodoPago: "EFECTIVO"
+                monto: 150000
+                observaciones: "Todo en efectivo"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+    
+    # Ventas de productos de tienda con métodos de pago específicos
+    ventasProductos: [
+      {
+        codigoProducto: "COCA-350"
+        cantidad: 5
+        unidadMedida: "unidades"
+        precioUnitario: 2500
+        valorTotal: 12500
+        # *** NUEVO: Métodos de pago específicos para productos de tienda ***
+        metodosPago: [
+          {
+            metodoPago: "EFECTIVO"
+            monto: 7500
+          }
+          {
+            metodoPago: "TARJETA_CREDITO"
+            monto: 5000
+          }
+        ]
+        observaciones: "Coca Cola 350ml"
+      }
+      {
+        codigoProducto: "ACEITE-20W50"
+        cantidad: 2
+        unidadMedida: "galones"
+        precioUnitario: 45000
+        valorTotal: 90000
+        metodosPago: [
+          {
+            metodoPago: "TRANSFERENCIA"
+            monto: 90000
+            observaciones: "Pago por transferencia bancaria"
+          }
+        ]
+      }
+    ]
+    
+    cantidadVentasRealizadas: 30
+    observacionesGenerales: "Cierre con métodos de pago detallados por producto"
+    puntoVentaId: "cme9dgjvn0002uhbvd3l50c0e"
+    startTime: "2025-08-13 20:51:00.000"
+    finishTime: "2025-08-13 22:51:00.000"
+    
+    # Resumen general (mantiene compatibilidad)
+    resumenVentas: {
+      totalVentasTurno: 552500  # Total general
+      metodosPago: [
+        {
+          metodoPago: "EFECTIVO"
+          monto: 257500  # Suma de todos los efectivos
+        }
+        {
+          metodoPago: "RUMBO"
+          monto: 200000
+        }
+        {
+          metodoPago: "TARJETA_CREDITO"
+          monto: 5000
+        }
+        {
+          metodoPago: "TRANSFERENCIA"
+          monto: 90000
+        }
+      ]
+    }
+  }) {
+    # Respuesta con métodos de pago detallados
+    resumenSurtidores {
+      numeroSurtidor
+      totalVentasLitros
+      totalVentasGalones
+      valorTotalSurtidor
+      ventas {
+        codigoProducto
+        nombreProducto
+        cantidadVendidaGalones
+        cantidadVendidaLitros
+        valorTotalVenta
+        # *** NUEVO: Métodos de pago por producto en la respuesta ***
+        metodosPago {
+          metodoPago
+          monto
+          porcentaje
+          observaciones
+        }
+      }
+    }
+    
+    resumenVentasProductos {
+      totalProductosVendidos
+      valorTotalVentasProductos
+      ventasDetalle {
+        codigoProducto
+        nombreProducto
+        cantidadVendida
+        valorTotalVenta
+        # *** NUEVO: Métodos de pago por producto de tienda ***
+        metodosPago {
+          metodoPago
+          monto
+          porcentaje
+          observaciones
+        }
+        procesadoExitosamente
+      }
+    }
+    
+    # Otros campos...
+    estadisticasVentas {
+      cantidadVentasDeclaradas
+      cantidadVentasCalculadas
+      ventasCombustibles
+      ventasProductos
+      promedioVentaPorTransaccion
+    }
+  }
+}
+```
+
+### Características de los métodos de pago por producto:
+
+1. **Granularidad**: Cada producto puede tener sus propios métodos de pago
+2. **Validación automática**: El sistema verifica que la suma de métodos de pago coincida con el valor del producto
+3. **Porcentajes calculados**: Se calcula automáticamente el porcentaje de cada método de pago por producto
+4. **Compatibilidad**: Mantiene el resumen general para compatibilidad con versiones anteriores
+5. **Advertencias**: Si hay discrepancias, se generan advertencias automáticas
+
+### Ejemplo de respuesta:
+
+```json
+{
+  "resumenSurtidores": [
+    {
+      "numeroSurtidor": "S-003",
+      "ventas": [
+        {
+          "codigoProducto": "GASOL-95",
+          "nombreProducto": "Gasolina 95 Octanos",
+          "valorTotalVenta": 300000,
+          "metodosPago": [
+            {
+              "metodoPago": "EFECTIVO",
+              "monto": 100000,
+              "porcentaje": 33.33
+            },
+            {
+              "metodoPago": "RUMBO",
+              "monto": 200000,
+              "porcentaje": 66.67
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "resumenVentasProductos": {
+    "ventasDetalle": [
+      {
+        "codigoProducto": "COCA-350",
+        "nombreProducto": "Coca Cola 350ml",
+        "valorTotalVenta": 12500,
+        "metodosPago": [
+          {
+            "metodoPago": "EFECTIVO",
+            "monto": 7500,
+            "porcentaje": 60.0
+          },
+          {
+            "metodoPago": "TARJETA_CREDITO",
+            "monto": 5000,
+            "porcentaje": 40.0
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Casos de uso:
+
+- **Estación con múltiples formas de pago**: Registrar exactamente cómo se pagó cada producto
+- **Control de caja por producto**: Saber cuánto efectivo corresponde a gasolina vs diesel vs tienda
+- **Reportes detallados**: Análisis de preferencias de pago por tipo de producto
+- **Auditoría**: Trazabilidad completa de cada transacción
+
+---
+
+## Mutation: processShiftClosure con Ventas Individuales por Unidad
+
+Para productos que se manejan por unidades (como Coca-Cola, aceites, etc.), ahora puedes registrar cada venta individual con su propio método de pago.
+
+### Ejemplo: 2 Coca-Colas vendidas por separado
+
+```graphql
+mutation ProcessShiftClosure {
+  processShiftClosure(cierreTurnoInput: {
+    # ... lecturas de surtidores ...
+    
+    # Ventas de productos con ventas individuales
+    ventasProductos: [
+      {
+        codigoProducto: "COCA-350"
+        unidadMedida: "unidades"
+        
+        # *** NUEVO: Ventas individuales por unidad ***
+        ventasIndividuales: [
+          {
+            cantidad: 1
+            precioUnitario: 4500
+            valorTotal: 4500
+            metodosPago: [
+              {
+                metodoPago: "EFECTIVO"
+                monto: 4500
+                observaciones: "Primera Coca-Cola en efectivo"
+              }
+            ]
+            observaciones: "Venta individual #1"
+          }
+          {
+            cantidad: 1
+            precioUnitario: 4500
+            valorTotal: 4500
+            metodosPago: [
+              {
+                metodoPago: "TARJETA_CREDITO"
+                monto: 4500
+                observaciones: "Segunda Coca-Cola con tarjeta"
+              }
+            ]
+            observaciones: "Venta individual #2"
+          }
+        ]
+        
+        observaciones: "Total: 2 Coca-Colas con métodos de pago diferentes"
+      }
+      
+      # Ejemplo con múltiples unidades en una sola transacción
+      {
+        codigoProducto: "ACEITE-20W50"
+        unidadMedida: "galones"
+        ventasIndividuales: [
+          {
+            cantidad: 3
+            precioUnitario: 45000
+            valorTotal: 135000
+            metodosPago: [
+              {
+                metodoPago: "EFECTIVO"
+                monto: 50000
+              }
+              {
+                metodoPago: "TARJETA_DEBITO"
+                monto: 85000
+              }
+            ]
+            observaciones: "3 galones de aceite pagados mixto"
+          }
+        ]
+      }
+      
+      # Formato anterior (compatible) - venta consolidada
+      {
+        codigoProducto: "AGUA-500"
+        cantidad: 5
+        unidadMedida: "unidades"
+        precioUnitario: 2000
+        valorTotal: 10000
+        metodosPago: [
+          {
+            metodoPago: "EFECTIVO"
+            monto: 10000
+          }
+        ]
+        observaciones: "Formato anterior - todas juntas"
+      }
+    ]
+    
+    # ... resto de la configuración ...
+  }) {
+    resumenVentasProductos {
+      totalProductosVendidos
+      valorTotalVentasProductos
+      ventasDetalle {
+        codigoProducto
+        nombreProducto
+        cantidadVendida  # Total consolidado
+        valorTotalVenta  # Total consolidado
+        
+        # *** NUEVO: Detalle de ventas individuales ***
+        ventasIndividuales {
+          cantidad
+          precioUnitario
+          valorTotal
+          metodosPago {
+            metodoPago
+            monto
+            porcentaje
+            observaciones
+          }
+          procesadoExitosamente
+          observaciones
+        }
+        
+        # Métodos de pago consolidados
+        metodosPago {
+          metodoPago
+          monto
+          porcentaje
+        }
+        
+        procesadoExitosamente
+      }
+    }
+  }
+}
+```
+
+### Respuesta esperada:
+
+```json
+{
+  "resumenVentasProductos": {
+    "totalProductosVendidos": 3,
+    "valorTotalVentasProductos": 154500,
+    "ventasDetalle": [
+      {
+        "codigoProducto": "COCA-350",
+        "nombreProducto": "Coca Cola 350ml",
+        "cantidadVendida": 2,
+        "valorTotalVenta": 9000,
+        "ventasIndividuales": [
+          {
+            "cantidad": 1,
+            "precioUnitario": 4500,
+            "valorTotal": 4500,
+            "metodosPago": [
+              {
+                "metodoPago": "EFECTIVO",
+                "monto": 4500,
+                "porcentaje": 100.0,
+                "observaciones": "Primera Coca-Cola en efectivo"
+              }
+            ],
+            "procesadoExitosamente": true,
+            "observaciones": "Venta individual #1"
+          },
+          {
+            "cantidad": 1,
+            "precioUnitario": 4500,
+            "valorTotal": 4500,
+            "metodosPago": [
+              {
+                "metodoPago": "TARJETA_CREDITO",
+                "monto": 4500,
+                "porcentaje": 100.0,
+                "observaciones": "Segunda Coca-Cola con tarjeta"
+              }
+            ],
+            "procesadoExitosamente": true,
+            "observaciones": "Venta individual #2"
+          }
+        ],
+        "metodosPago": [
+          {
+            "metodoPago": "EFECTIVO",
+            "monto": 4500,
+            "porcentaje": 50.0
+          },
+          {
+            "metodoPago": "TARJETA_CREDITO",
+            "monto": 4500,
+            "porcentaje": 50.0
+          }
+        ],
+        "procesadoExitosamente": true
+      }
+    ]
+  }
+}
+```
+
+### Características del nuevo formato:
+
+1. **Ventas Individuales**: Cada unidad o grupo de unidades puede tener sus propios métodos de pago
+2. **Consolidación Automática**: El sistema consolida automáticamente los totales y métodos de pago
+3. **Compatibilidad**: Mantiene soporte para el formato anterior
+4. **Validación Granular**: Verifica cada venta individual por separado
+5. **Trazabilidad Completa**: Cada unidad vendida queda registrada con su método de pago específico
+
+### Casos de uso:
+
+- **Venta mixta de productos idénticos**: 2 Coca-Colas, una en efectivo y otra con tarjeta
+- **Compras grupales**: 3 aceites pagados parcialmente en efectivo y parcialmente con tarjeta
+- **Control granular**: Saber exactamente cómo se pagó cada unidad individual
+- **Reportes detallados**: Análisis de preferencias de pago por unidad de producto
+
+---

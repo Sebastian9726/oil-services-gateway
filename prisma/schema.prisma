@@ -71,6 +71,7 @@ model PuntoVenta {
   turnos               Turno[]
   ventas               Venta[]
   usuarios             Usuario[]          @relation("PuntoVentaToUsuario")
+  entradasInventario   EntradaInventario[] // Relación con entradas de inventario
 
   @@map("puntos_venta")
   @@schema("configuracion")
@@ -234,7 +235,7 @@ model Producto {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   categoriaId        String
-  entradasInventario EntradaInventario[]
+  entradasInventario EntradaInventarioProcess[]
   mangueras          MangueraSurtidor[]
   categoria          Categoria           @relation(fields: [categoriaId], references: [id])
   tanques            Tanque[]
@@ -260,7 +261,7 @@ model Tanque {
   updatedAt          DateTime            @updatedAt
   productoId         String
   puntoVentaId       String
-  entradasInventario EntradaInventario[]
+  entradasInventario EntradaInventarioProcess[]
   tablaAforo         TablaAforo[]
   producto           Producto            @relation(fields: [productoId], references: [id])
   puntoVenta         PuntoVenta          @relation(fields: [puntoVentaId], references: [id])
@@ -350,22 +351,94 @@ model HistorialLectura {
   @@schema("inventario")
 }
 
+// Tabla simple para códigos de entrada de inventario
 model EntradaInventario {
-  id             String   @id @default(cuid())
-  cantidad       Decimal  @db.Decimal(10, 2)
-  precioUnitario Decimal  @db.Decimal(10, 2)
-  precioTotal    Decimal  @db.Decimal(10, 2)
-  numeroFactura  String?
-  observaciones  String?
-  fechaEntrada   DateTime @default(now())
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  productoId     String
-  tanqueId       String?
-  producto       Producto @relation(fields: [productoId], references: [id])
-  tanque         Tanque?  @relation(fields: [tanqueId], references: [id])
-
+  id                     String      @id @default(cuid())
+  
+  // Código único del proceso de entrada
+  codigoProceso          String      @unique
+  
+  // Información básica del proceso
+  puntoVentaId           String
+  tipoEntrada            String      // "compra", "transferencia", "ajuste", "descarga_carrotanque"
+  responsable            String?     // Responsable del ingreso
+  estado                 String      @default("PROCESANDO") // "PROCESANDO", "COMPLETADO_EXITOSAMENTE", "COMPLETADO_CON_ERRORES", "ERROR"
+  
+  // Fechas del proceso
+  fechaInicio            DateTime    @default(now())
+  fechaFin               DateTime?
+  
+  // Información financiera del proceso completo
+  costoTotalProceso      Decimal?    @db.Decimal(12, 2)
+  
+  // Observaciones del proceso completo
+  observacionesGenerales String?
+  
+  // Estadísticas del proceso
+  totalMovimientos       Int         @default(0) // Cantidad de movimientos procesados
+  movimientosExitosos    Int         @default(0) // Movimientos sin errores
+  movimientosConError    Int         @default(0) // Movimientos con errores
+  
+  // Fechas de auditoría
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+  
+  // Relaciones
+  puntoVenta             PuntoVenta  @relation(fields: [puntoVentaId], references: [id])
+  procesos               EntradaInventarioProcess[] // Procesos específicos con este código
+  
   @@map("entradas_inventario")
+  @@schema("inventario")
+}
+
+// Tabla para procesos específicos de inventario con información detallada
+model EntradaInventarioProcess {
+  id                     String      @id @default(cuid())
+  
+  // Referencia al código de entrada
+  entradaInventarioId    String
+  
+  // Información específica del producto/movimiento
+  cantidad               Decimal     @db.Decimal(12, 3)
+  unidadMedida           String      @default("unidades") // "litros", "galones", "unidades"
+  tipoMovimiento         String      @default("entrada") // "entrada", "salida", "ajuste"
+  
+  // Información financiera del movimiento
+  precioUnitario         Decimal?    @db.Decimal(10, 2)
+  costoTotal             Decimal?    @db.Decimal(12, 2)
+  
+  // Información específica del producto en este movimiento
+  codigoProducto         String?     // Código del producto para trazabilidad
+  lote                   String?     // Número de lote específico
+  fechaVencimiento       DateTime?   // Fecha de vencimiento específica
+  
+  // Información específica de tanques (para combustibles)
+  alturaFluidoAnterior   Decimal?    @db.Decimal(8, 3) // Altura anterior en tanques (cm)
+  alturaFluidoNueva      Decimal?    @db.Decimal(8, 3) // Altura nueva en tanques (cm)
+  volumenCalculado       Decimal?    @db.Decimal(12, 3) // Volumen calculado por diferencia de altura
+  
+  // Estado y observaciones del movimiento específico
+  estadoMovimiento       String      @default("COMPLETADO") // "COMPLETADO", "ERROR", "PENDIENTE"
+  observaciones          String?     // Observaciones específicas de este movimiento
+  mensajeError           String?     // Mensaje de error si el movimiento falló
+  
+  // Fecha específica del movimiento
+  fechaMovimiento        DateTime    @default(now())
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+  
+  // Relaciones específicas del movimiento
+  productoId             String?     // Producto específico del movimiento
+  tanqueId               String?     // Tanque específico (para combustibles)
+  carrotanqueId          String?     // Carrotanque específico (para descargas)
+  
+  // Relaciones
+  entradaInventario      EntradaInventario @relation(fields: [entradaInventarioId], references: [id], onDelete: Cascade)
+  producto               Producto?   @relation(fields: [productoId], references: [id])
+  tanque                 Tanque?     @relation(fields: [tanqueId], references: [id])
+  carrotanque            Carrotanque? @relation(fields: [carrotanqueId], references: [id])
+
+  @@map("entradas_inventario_process")
   @@schema("inventario")
 }
 
@@ -469,6 +542,7 @@ model Carrotanque {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   tablaAforo         TablaAforoCarrotanque[]
+  entradasInventario EntradaInventarioProcess[] // Relación con entradas de inventario
 
   @@map("carrotanques")
   @@schema("inventario")

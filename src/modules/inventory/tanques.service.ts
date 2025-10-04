@@ -196,7 +196,7 @@ export class TanquesService {
     }
 
     // Verificar que no haya entradas de inventario asociadas
-    const entradasInventario = await this.prisma.entradaInventario.count({
+    const entradasInventario = await this.prisma.entradaInventarioProcess.count({
       where: { tanqueId: id }
     });
 
@@ -284,13 +284,15 @@ export class TanquesService {
 
     // Verificar nivel mínimo
     const nivelMinimo = parseFloat(tanque.nivelMinimo.toString());
+    const unidadDisplay = tanque.unidadMedida || 'unidades';
+    
     if (volumen < nivelMinimo) {
-      warnings.push(`¡ALERTA! El volumen calculado (${volumen}L) está por debajo del nivel mínimo (${nivelMinimo}L)`);
+      warnings.push(`¡ALERTA! El volumen calculado (${volumen} ${unidadDisplay}) está por debajo del nivel mínimo (${nivelMinimo} ${unidadDisplay})`);
       // TODO: Add alert to Sentry or other monitoring service or send email
       messages.push(`Tanque con nivel crítico. Se requiere abastecimiento urgente.`);
       status = 'CRITICAL';
     } else if (volumen < nivelMinimo * 1.2) { // Warning si está dentro del 20% del mínimo
-      warnings.push(`Nivel bajo: El volumen (${volumen}L) está cerca del nivel mínimo (${nivelMinimo}L)`);
+      warnings.push(`Nivel bajo: El volumen (${volumen} ${unidadDisplay}) está cerca del nivel mínimo (${nivelMinimo} ${unidadDisplay})`);
       // TODO: Add alert to Sentry or other monitoring service or send email
       messages.push('Se recomienda programar abastecimiento pronto');
       status = status === 'CRITICAL' ? 'CRITICAL' : 'WARNING';
@@ -316,7 +318,7 @@ export class TanquesService {
     const tanqueMapeado = this.mapTanqueWithCalculations(tanqueActualizado);
 
     if (warnings.length === 0) {
-      messages.push(`Nivel actualizado exitosamente: ${volumen}L (${alturaFluido}cm)`);
+      messages.push(`Nivel actualizado exitosamente: ${volumen} ${unidadDisplay} (${alturaFluido}cm)`);
     }
 
     return {
@@ -406,8 +408,36 @@ export class TanquesService {
 
   /**
    * Obtener volumen basado en altura usando tabla de aforo
+   * Retorna el volumen en la unidad original de la tabla de aforo
    */
   async getVolumeByHeight(tanqueId: string, altura: number): Promise<number> {
+    // Primero verificar que existe tabla de aforo y obtener los límites
+    const tablaAforo = await this.prisma.tablaAforo.findMany({
+      where: { tanqueId },
+      orderBy: { altura: 'asc' }
+    });
+
+    if (!tablaAforo || tablaAforo.length === 0) {
+      throw new BadRequestException('El tanque no tiene tabla de aforo configurada');
+    }
+
+    const alturaMinima = parseFloat(tablaAforo[0].altura.toString());
+    const alturaMaxima = parseFloat(tablaAforo[tablaAforo.length - 1].altura.toString());
+
+    // Validar que la altura esté dentro del rango de la tabla de aforo
+    // Permitir altura 0 para tanques recién creados o vacíos
+    if (altura < alturaMinima && altura !== 0) {
+      throw new BadRequestException(
+        `La altura ingresada (${altura}cm) es menor que la altura mínima de la tabla de aforo (${alturaMinima}cm)`
+      );
+    }
+
+    if (altura > alturaMaxima) {
+      throw new BadRequestException(
+        `La altura ingresada (${altura}cm) excede la altura máxima de la tabla de aforo (${alturaMaxima}cm). ` +
+        `Altura máxima permitida: ${alturaMaxima}cm`
+      );
+    }    
     // Buscar entrada exacta en tabla de aforo
     let entrada = await this.prisma.tablaAforo.findFirst({
       where: { 

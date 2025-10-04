@@ -1,6 +1,45 @@
 import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
 
 @ObjectType()
+export class MetodoPagoProductoResult {
+  @Field()
+  metodoPago: string;
+
+  @Field(() => Float)
+  monto: number;
+
+  @Field(() => Float)
+  porcentaje: number;
+
+  @Field({ nullable: true })
+  observaciones?: string;
+}
+
+@ObjectType()
+export class VentaIndividualResult {
+  @Field(() => Float)
+  cantidad: number;
+
+  @Field(() => Float)
+  precioUnitario: number;
+
+  @Field(() => Float)
+  valorTotal: number;
+
+  @Field(() => [MetodoPagoProductoResult])
+  metodosPago: MetodoPagoProductoResult[];
+
+  @Field()
+  procesadoExitosamente: boolean;
+
+  @Field({ nullable: true })
+  error?: string;
+
+  @Field({ nullable: true })
+  observaciones?: string;
+}
+
+@ObjectType()
 export class ProductSaleResult {
   @Field()
   codigoProducto: string;
@@ -28,6 +67,12 @@ export class ProductSaleResult {
 
   @Field()
   procesadoExitosamente: boolean;
+
+  @Field(() => [VentaIndividualResult], { nullable: true })
+  ventasIndividuales?: VentaIndividualResult[];
+
+  @Field(() => [MetodoPagoProductoResult], { nullable: true })
+  metodosPago?: MetodoPagoProductoResult[];
 
   @Field({ nullable: true })
   error?: string;
@@ -79,6 +124,9 @@ export class CalculatedSale {
 
   @Field()
   unidadOriginal: string;
+
+  @Field(() => [MetodoPagoProductoResult], { nullable: true })
+  metodosPago?: MetodoPagoProductoResult[];
 }
 
 @ObjectType()
@@ -645,4 +693,81 @@ export class EstadisticasCierresPorPeriodoResponse {
 
   @Field(() => [EstadisticaPeriodo])
   estadisticasPorPeriodo: EstadisticaPeriodo[];
+}
+
+// === TIPOS PARA ESTADÍSTICAS DE MÉTODOS DE PAGO ===
+
+@ObjectType()
+export class MetodoPagoEstadistica {
+  @Field()
+  metodoPago: string;
+
+  @Field(() => Float)
+  montoTotal: number;
+
+  @Field(() => Int)
+  cantidadTransacciones: number;
+
+  @Field(() => Float)
+  porcentajeDelTotal: number;
+
+  @Field(() => Float)
+  montoPromedioPorTransaccion: number;
+
+  @Field(() => [String])
+  productosVendidos: string[]; // Lista de productos únicos
+
+  @Field(() => Int)
+  cantidadProductosUnicos: number;
+}
+
+@ObjectType()
+export class MetodoPagoPorProducto {
+  @Field()
+  codigoProducto: string;
+
+  @Field()
+  nombreProducto: string;
+
+  @Field()
+  metodoPago: string;
+
+  @Field(() => Float)
+  montoTotal: number;
+
+  @Field(() => Int)
+  cantidadVentas: number;
+
+  @Field(() => Float)
+  cantidadVendida: number;
+
+  @Field()
+  unidadMedida: string;
+}
+
+@ObjectType()
+export class EstadisticasMetodosPagoResponse {
+  @Field()
+  fechaDesde: Date;
+
+  @Field()
+  fechaHasta: Date;
+
+  @Field(() => Float)
+  montoTotalPeriodo: number;
+
+  @Field(() => Int)
+  totalTransacciones: number;
+
+  @Field(() => Int)
+  totalCierres: number;
+
+  @Field(() => [MetodoPagoEstadistica])
+  resumenPorMetodoPago: MetodoPagoEstadistica[];
+
+  @Field(() => [MetodoPagoPorProducto])
+  detallesPorProducto: MetodoPagoPorProducto[];
+
+  @Field()
+  fechaGeneracion: Date;
 } 

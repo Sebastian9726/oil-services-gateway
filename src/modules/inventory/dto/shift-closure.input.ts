@@ -3,21 +3,29 @@ import { IsString, IsNotEmpty, IsNumber, IsOptional, Min, IsArray, ValidateNeste
 import { Type } from 'class-transformer';
 
 @InputType()
-export class ProductSaleInput {
+export class MetodoPagoProductoInput {
   @Field()
   @IsString()
-  @IsNotEmpty({ message: 'El código del producto es requerido' })
-  codigoProducto: string;
+  @IsNotEmpty({ message: 'El método de pago es requerido' })
+  metodoPago: string; // "EFECTIVO", "TARJETA_CREDITO", "TARJETA_DEBITO", "TRANSFERENCIA", "RUMBO", etc.
 
+  @Field(() => Float)
+  @IsNumber({}, { message: 'El monto debe ser un número' })
+  @Min(0, { message: 'El monto debe ser mayor o igual a 0' })
+  monto: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+}
+
+@InputType()
+export class VentaIndividualInput {
   @Field(() => Float)
   @IsNumber({}, { message: 'La cantidad debe ser un número' })
   @Min(0.01, { message: 'La cantidad debe ser mayor a 0' })
-  cantidad: number;
-
-  @Field()
-  @IsString()
-  @IsNotEmpty({ message: 'La unidad de medida es requerida' })
-  unidadMedida: string; // "unidades", "litros", "galones"
+  cantidad: number; // Ejemplo: 1 (una unidad)
 
   @Field(() => Float)
   @IsNumber({}, { message: 'El precio unitario debe ser un número' })
@@ -28,6 +36,63 @@ export class ProductSaleInput {
   @IsNumber({}, { message: 'El valor total debe ser un número' })
   @Min(0, { message: 'El valor total debe ser mayor o igual a 0' })
   valorTotal: number;
+
+  @Field(() => [MetodoPagoProductoInput])
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MetodoPagoProductoInput)
+  metodosPago: MetodoPagoProductoInput[];
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+}
+
+@InputType()
+export class ProductSaleInput {
+  @Field()
+  @IsString()
+  @IsNotEmpty({ message: 'El código del producto es requerido' })
+  codigoProducto: string;
+
+  @Field()
+  @IsString()
+  @IsNotEmpty({ message: 'La unidad de medida es requerida' })
+  unidadMedida: string; // "unidades", "litros", "galones"
+
+  @Field(() => [VentaIndividualInput], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => VentaIndividualInput)
+  ventasIndividuales?: VentaIndividualInput[];
+
+  // Campos para compatibilidad con el formato anterior (opcional)
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
+  @IsNumber({}, { message: 'La cantidad debe ser un número' })
+  @Min(0.01, { message: 'La cantidad debe ser mayor a 0' })
+  cantidad?: number;
+
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
+  @IsNumber({}, { message: 'El precio unitario debe ser un número' })
+  @Min(0, { message: 'El precio unitario debe ser mayor o igual a 0' })
+  precioUnitario?: number;
+
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
+  @IsNumber({}, { message: 'El valor total debe ser un número' })
+  @Min(0, { message: 'El valor total debe ser mayor o igual a 0' })
+  valorTotal?: number;
+
+  @Field(() => [MetodoPagoProductoInput], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MetodoPagoProductoInput)
+  metodosPago?: MetodoPagoProductoInput[];
 
   @Field({ nullable: true })
   @IsOptional()
@@ -61,6 +126,13 @@ export class HoseReadingInput {
   @IsString()
   @IsNotEmpty({ message: 'La unidad de medida es requerida' })
   unidadMedida: string; // "litros" o "galones"
+
+  @Field(() => [MetodoPagoProductoInput], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MetodoPagoProductoInput)
+  metodosPago?: MetodoPagoProductoInput[];
 
   @Field({ nullable: true })
   @IsOptional()

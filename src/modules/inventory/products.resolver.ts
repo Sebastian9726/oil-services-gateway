@@ -20,12 +20,26 @@ import {
   CierreTurnoListResponse,
   ActualizacionInventarioResponse,
   BusquedaCierresCompletosResponse,
-  EstadisticasCierresPorPeriodoResponse
+  EstadisticasCierresPorPeriodoResponse,
+  EstadisticasMetodosPagoResponse
 } from './entities/shift-closure.entity';
 import {
   CierreTurnoInput,
   LecturaMangueraInput
 } from './dto/shift-closure.input';
+import { InventoryEntryInput } from './dto/inventory-entry.input';
+import { InventoryEntryResponse } from './entities/inventory-entry.entity';
+import {
+  InventoryProcessInput,
+  TankMovementInput,
+  ProductMovementInput,
+  CarrotanqueMovementInput
+} from './dto/inventory-process.input';
+import {
+  InventoryProcessResponse,
+  InventoryProcessResult,
+  InventoryMovementResult
+} from './dto/inventory-process.response';
 import { SimpleStockUpdateInput } from './dto/simple-stock-update.input';
 import { CreateProductInput } from './dto/create-product.input';
 import { UpdateProductInput } from './dto/update-product.input';
@@ -33,6 +47,7 @@ import { WriteOffExpiredProductsInput } from './dto/write-off-expired.input';
 import { WriteOffExpiredProductsResponse } from './entities/write-off-response.entity';
 import { PrismaService } from '../../config/prisma/prisma.service';
 import { TanquesService } from './tanques.service';
+import { InventoryService } from './inventory.service';
 
 @Resolver(() => Producto)
 @UseGuards(JwtAuthGuard)
@@ -41,7 +56,8 @@ export class ProductsResolver {
     private readonly productsService: ProductsService,
     private readonly surtidoresService: SurtidoresService,
     private readonly prisma: PrismaService,
-    private readonly tanquesService: TanquesService
+    private readonly tanquesService: TanquesService,
+    private readonly inventoryService: InventoryService
   ) {}
 
   @Mutation(() => Producto)
@@ -417,6 +433,24 @@ export class ProductsResolver {
             const precioGalon = Math.round(precioLitro / LITROS_TO_GALONES * 100) / 100;
             const valorVenta = cantidadLitros * precioLitro;
 
+            // Calcular métodos de pago para este producto
+            let metodosPagoProducto = [];
+            if (manguera.metodosPago && manguera.metodosPago.length > 0) {
+              let totalDeclaradoManguera = manguera.metodosPago.reduce((sum, mp) => sum + mp.monto, 0);
+              
+              // Validar que la suma de métodos de pago coincida con el valor de venta
+              if (Math.abs(totalDeclaradoManguera - valorVenta) > 0.01) {
+                advertencias.push(`${manguera.codigoProducto} en surtidor ${surtidor.numeroSurtidor}: Suma de métodos de pago ($${totalDeclaradoManguera}) no coincide con valor de venta ($${Math.round(valorVenta * 100) / 100})`);
+              }
+
+              metodosPagoProducto = manguera.metodosPago.map(mp => ({
+                metodoPago: mp.metodoPago,
+                monto: Math.round(mp.monto * 100) / 100,
+                porcentaje: totalDeclaradoManguera > 0 ? Math.round((mp.monto / totalDeclaradoManguera) * 100 * 100) / 100 : 0,
+                observaciones: mp.observaciones
+              }));
+            }
+
             // ACTUALIZAR LECTURAS DE LA MANGUERA SIEMPRE
             console.log(`[CIERRE_TURNO] Actualizando lecturas: surtidor=${surtidor.numeroSurtidor}, manguera=${manguera.numeroManguera}`);
             
@@ -499,7 +533,8 @@ export class ProductsResolver {
               precioUnitarioLitro: precioLitro,
               precioUnitarioGalon: precioGalon,
               valorTotalVenta: Math.round(valorVenta * 100) / 100,
-              unidadOriginal: manguera.unidadMedida
+              unidadOriginal: manguera.unidadMedida,
+              metodosPago: metodosPagoProducto
             });
 
             totalSurtidorLitros += cantidadLitros;
@@ -671,20 +706,129 @@ export class ProductsResolver {
 
             console.log(`[CIERRE_TURNO] Producto encontrado: ${product.codigo} - Stock actual: ${product.stockActual}`);
 
+            let ventasIndividualesDetalle = [];
+            let cantidadTotalProducto = 0;
+            let valorTotalProducto = 0;
+            let metodosPagoConsolidados = [];
+
+            // Determinar si usar formato nuevo (ventasIndividuales) o formato anterior
+            if (ventaProducto.ventasIndividuales && ventaProducto.ventasIndividuales.length > 0) {
+              // FORMATO NUEVO: Ventas individuales por unidad
+              console.log(`[CIERRE_TURNO] Procesando ${ventaProducto.ventasIndividuales.length} ventas individuales de ${ventaProducto.codigoProducto}`);
+              
+              for (const ventaIndividual of ventaProducto.ventasIndividuales) {
+                const valorCalculadoIndividual = ventaIndividual.cantidad * ventaIndividual.precioUnitario;
+                
+                // Validar valor individual
+                if (Math.abs(valorCalculadoIndividual - ventaIndividual.valorTotal) > 0.01) {
+                  advertencias.push(`${ventaProducto.codigoProducto} (venta individual): Valor calculado (${valorCalculadoIndividual}) no coincide con declarado (${ventaIndividual.valorTotal})`);
+                }
+
+                // Procesar métodos de pago de la venta individual
+                let totalDeclaradoVentaIndividual = ventaIndividual.metodosPago.reduce((sum, mp) => sum + mp.monto, 0);
+                
+                if (Math.abs(totalDeclaradoVentaIndividual - ventaIndividual.valorTotal) > 0.01) {
+                  advertencias.push(`${ventaProducto.codigoProducto} (venta individual): Suma de métodos de pago ($${totalDeclaradoVentaIndividual}) no coincide con valor total ($${ventaIndividual.valorTotal})`);
+                }
+
+                const metodosPagoVentaIndividual = ventaIndividual.metodosPago.map(mp => ({
+                  metodoPago: mp.metodoPago,
+                  monto: Math.round(mp.monto * 100) / 100,
+                  porcentaje: totalDeclaradoVentaIndividual > 0 ? Math.round((mp.monto / totalDeclaradoVentaIndividual) * 100 * 100) / 100 : 0,
+                  observaciones: mp.observaciones
+                }));
+
+                // Agregar a totales
+                cantidadTotalProducto += ventaIndividual.cantidad;
+                valorTotalProducto += ventaIndividual.valorTotal;
+
+                // Consolidar métodos de pago
+                for (const mp of ventaIndividual.metodosPago) {
+                  const existente = metodosPagoConsolidados.find(consolidado => consolidado.metodoPago === mp.metodoPago);
+                  if (existente) {
+                    existente.monto += mp.monto;
+                  } else {
+                    metodosPagoConsolidados.push({
+                      metodoPago: mp.metodoPago,
+                      monto: mp.monto,
+                      observaciones: mp.observaciones
+                    });
+                  }
+                }
+
+                ventasIndividualesDetalle.push({
+                  cantidad: ventaIndividual.cantidad,
+                  precioUnitario: ventaIndividual.precioUnitario,
+                  valorTotal: ventaIndividual.valorTotal,
+                  metodosPago: metodosPagoVentaIndividual,
+                  procesadoExitosamente: true,
+                  error: null,
+                  observaciones: ventaIndividual.observaciones
+                });
+              }
+
+            } else if (ventaProducto.cantidad && ventaProducto.precioUnitario && ventaProducto.valorTotal) {
+              // FORMATO ANTERIOR: Una sola venta consolidada
+              console.log(`[CIERRE_TURNO] Procesando venta consolidada de ${ventaProducto.codigoProducto}`);
+              
+              cantidadTotalProducto = ventaProducto.cantidad;
+              valorTotalProducto = ventaProducto.valorTotal;
+
+              // Validar valor total
+              const valorCalculado = ventaProducto.cantidad * ventaProducto.precioUnitario;
+              if (Math.abs(valorCalculado - ventaProducto.valorTotal) > 0.01) {
+                advertencias.push(`${ventaProducto.codigoProducto}: Valor total no coincide. Calculado: ${valorCalculado}, Declarado: ${ventaProducto.valorTotal}`);
+              }
+
+              // Procesar métodos de pago del producto (formato anterior)
+              if (ventaProducto.metodosPago && ventaProducto.metodosPago.length > 0) {
+                let totalDeclaradoProducto = ventaProducto.metodosPago.reduce((sum, mp) => sum + mp.monto, 0);
+                
+                if (Math.abs(totalDeclaradoProducto - ventaProducto.valorTotal) > 0.01) {
+                  advertencias.push(`${ventaProducto.codigoProducto}: Suma de métodos de pago ($${totalDeclaradoProducto}) no coincide con valor total ($${ventaProducto.valorTotal})`);
+                }
+
+                metodosPagoConsolidados = ventaProducto.metodosPago.map(mp => ({
+                  metodoPago: mp.metodoPago,
+                  monto: Math.round(mp.monto * 100) / 100,
+                  observaciones: mp.observaciones
+                }));
+              }
+
+            } else {
+              errores.push(`${ventaProducto.codigoProducto}: Debe especificar ventasIndividuales o los campos cantidad/precioUnitario/valorTotal`);
+              ventasDetalle.push({
+                codigoProducto: ventaProducto.codigoProducto,
+                nombreProducto: product.nombre,
+                cantidadVendida: 0,
+                unidadMedida: ventaProducto.unidadMedida,
+                precioUnitario: 0,
+                valorTotalVenta: 0,
+                stockAnterior: product.stockActual,
+                stockActual: product.stockActual,
+                procesadoExitosamente: false,
+                error: 'Datos de venta incompletos',
+                observaciones: ventaProducto.observaciones
+              });
+              productosVentaConError++;
+              continue;
+            }
+
             // Verificar stock disponible
-            if (product.stockActual < ventaProducto.cantidad) {
-              const error = `Stock insuficiente. Disponible: ${product.stockActual}, Solicitado: ${ventaProducto.cantidad}`;
+            if (product.stockActual < cantidadTotalProducto) {
+              const error = `Stock insuficiente. Disponible: ${product.stockActual}, Solicitado: ${cantidadTotalProducto}`;
               errores.push(`${ventaProducto.codigoProducto}: ${error}`);
               ventasDetalle.push({
                 codigoProducto: ventaProducto.codigoProducto,
                 nombreProducto: product.nombre,
                 cantidadVendida: 0,
                 unidadMedida: ventaProducto.unidadMedida,
-                precioUnitario: ventaProducto.precioUnitario,
+                precioUnitario: ventaProducto.precioUnitario || 0,
                 valorTotalVenta: 0,
                 stockAnterior: product.stockActual,
                 stockActual: product.stockActual,
                 procesadoExitosamente: false,
+                ventasIndividuales: ventasIndividualesDetalle.length > 0 ? ventasIndividualesDetalle : undefined,
                 error,
                 observaciones: ventaProducto.observaciones
               });
@@ -692,44 +836,48 @@ export class ProductsResolver {
               continue;
             }
 
-            // Validar que el valor total coincida
-            const valorCalculado = ventaProducto.cantidad * ventaProducto.precioUnitario;
-            if (Math.abs(valorCalculado - ventaProducto.valorTotal) > 0.01) {
-              advertencias.push(`${ventaProducto.codigoProducto}: Valor total no coincide. Calculado: ${valorCalculado}, Declarado: ${ventaProducto.valorTotal}`);
-            }
-
             // Actualizar stock del producto
             try {
-              await this.productsService.updateStock(product.id, ventaProducto.cantidad, 'salida');
+              await this.productsService.updateStock(product.id, cantidadTotalProducto, 'salida');
               productosActualizados++;
               
               // Contar venta de producto
               ventasProductosCalculadas++;
               
-              console.log(`[CIERRE_TURNO] Stock actualizado para ${product.codigo}: -${ventaProducto.cantidad} ${product.unidadMedida}`);
+              console.log(`[CIERRE_TURNO] Stock actualizado para ${product.codigo}: -${cantidadTotalProducto} ${product.unidadMedida}`);
+
+              // Calcular métodos de pago consolidados con porcentajes
+              const metodosPagoProductoFinal = metodosPagoConsolidados.map(mp => ({
+                metodoPago: mp.metodoPago,
+                monto: Math.round(mp.monto * 100) / 100,
+                porcentaje: valorTotalProducto > 0 ? Math.round((mp.monto / valorTotalProducto) * 100 * 100) / 100 : 0,
+                observaciones: mp.observaciones
+              }));
 
               ventasDetalle.push({
                 codigoProducto: ventaProducto.codigoProducto,
                 nombreProducto: product.nombre,
-                cantidadVendida: ventaProducto.cantidad,
+                cantidadVendida: cantidadTotalProducto,
                 unidadMedida: ventaProducto.unidadMedida,
-                precioUnitario: ventaProducto.precioUnitario,
-                valorTotalVenta: ventaProducto.valorTotal,
+                precioUnitario: valorTotalProducto / cantidadTotalProducto, // Precio promedio
+                valorTotalVenta: valorTotalProducto,
                 stockAnterior: product.stockActual,
-                stockActual: product.stockActual - ventaProducto.cantidad,
+                stockActual: product.stockActual - cantidadTotalProducto,
                 procesadoExitosamente: true,
+                ventasIndividuales: ventasIndividualesDetalle.length > 0 ? ventasIndividualesDetalle : undefined,
+                metodosPago: metodosPagoProductoFinal,
                 error: null,
                 observaciones: ventaProducto.observaciones
               });
 
               productosVentaExitosos++;
-              valorTotalVentasProductos += ventaProducto.valorTotal;
+              valorTotalVentasProductos += valorTotalProducto;
 
               // Agregar al valor total general
-              valorTotalGeneral += ventaProducto.valorTotal;
+              valorTotalGeneral += valorTotalProducto;
 
               // Advertencia si el stock queda muy bajo
-              const stockFinal = product.stockActual - ventaProducto.cantidad;
+              const stockFinal = product.stockActual - cantidadTotalProducto;
               if (stockFinal <= product.stockMinimo && stockFinal > 0) {
                 advertencias.push(`${ventaProducto.codigoProducto}: Stock bajo después de la venta (${stockFinal} <= ${product.stockMinimo})`);
               } else if (stockFinal === 0) {
@@ -743,11 +891,12 @@ export class ProductsResolver {
                 nombreProducto: product.nombre,
                 cantidadVendida: 0,
                 unidadMedida: ventaProducto.unidadMedida,
-                precioUnitario: ventaProducto.precioUnitario,
+                precioUnitario: ventaProducto.precioUnitario || 0,
                 valorTotalVenta: 0,
                 stockAnterior: product.stockActual,
                 stockActual: product.stockActual,
                 procesadoExitosamente: false,
+                ventasIndividuales: ventasIndividualesDetalle.length > 0 ? ventasIndividualesDetalle : undefined,
                 error: stockError.message,
                 observaciones: ventaProducto.observaciones
               });
@@ -1796,6 +1945,256 @@ export class ProductsResolver {
     return resumenGeneral;
   }
 
+  @Query(() => EstadisticasMetodosPagoResponse, { name: 'getEstadisticasMetodosPago' })
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager', 'employee')
+  async getEstadisticasMetodosPago(
+    @Args('fechaDesde') fechaDesde: Date,
+    @Args('fechaHasta') fechaHasta: Date,
+    @Args('puntoVentaId', { type: () => ID, nullable: true }) puntoVentaId?: string,
+    @Args('metodoPago', { nullable: true }) metodoPago?: string,
+    @Args('codigoProducto', { nullable: true }) codigoProducto?: string
+  ): Promise<EstadisticasMetodosPagoResponse> {
+    
+    // Construir filtros
+    const whereClause: any = {
+      fechaCierre: {
+        gte: fechaDesde,
+        lte: fechaHasta
+      }
+    };
+
+    if (puntoVentaId) {
+      whereClause.turno = {
+        puntoVentaId: puntoVentaId
+      };
+    }
+
+    // Obtener todos los cierres del período
+    const cierres = await this.prisma.cierreTurno.findMany({
+      where: whereClause,
+      include: {
+        turno: {
+          include: {
+            puntoVenta: {
+              select: { id: true, nombre: true }
+            }
+          }
+        },
+        usuario: {
+          select: { id: true, nombre: true, apellido: true }
+        }
+      },
+      orderBy: { fechaCierre: 'asc' }
+    });
+
+    // Estructuras para acumular datos
+    const metodosPagoStats = new Map<string, {
+      montoTotal: number;
+      cantidadTransacciones: number;
+      productosVendidos: Set<string>;
+    }>();
+
+    const productosPorMetodo = new Map<string, {
+      codigoProducto: string;
+      nombreProducto: string;
+      metodoPago: string;
+      montoTotal: number;
+      cantidadVentas: number;
+      cantidadVendida: number;
+      unidadMedida: string;
+    }>();
+
+    let montoTotalPeriodo = 0;
+    let totalTransacciones = 0;
+
+    // Procesar cada cierre
+    for (const cierre of cierres) {
+      const datosCompletos = cierre.resumenSurtidores as any;
+      
+      // Procesar datos de combustibles (desde surtidores)
+      if (datosCompletos?.datosProcesados?.resumenSurtidores) {
+        for (const surtidor of datosCompletos.datosProcesados.resumenSurtidores) {
+          for (const venta of surtidor.ventas || []) {
+            if (venta.metodosPago) {
+              for (const mp of venta.metodosPago) {
+                // Filtrar por método de pago si se especifica
+                if (metodoPago && mp.metodoPago !== metodoPago) continue;
+                // Filtrar por producto si se especifica
+                if (codigoProducto && venta.codigoProducto !== codigoProducto) continue;
+
+                // Acumular estadísticas por método de pago
+                if (!metodosPagoStats.has(mp.metodoPago)) {
+                  metodosPagoStats.set(mp.metodoPago, {
+                    montoTotal: 0,
+                    cantidadTransacciones: 0,
+                    productosVendidos: new Set()
+                  });
+                }
+
+                const stats = metodosPagoStats.get(mp.metodoPago)!;
+                stats.montoTotal += mp.monto;
+                stats.cantidadTransacciones += 1;
+                stats.productosVendidos.add(venta.codigoProducto);
+
+                // Acumular por producto y método de pago
+                const key = `${venta.codigoProducto}_${mp.metodoPago}`;
+                if (!productosPorMetodo.has(key)) {
+                  productosPorMetodo.set(key, {
+                    codigoProducto: venta.codigoProducto,
+                    nombreProducto: venta.nombreProducto,
+                    metodoPago: mp.metodoPago,
+                    montoTotal: 0,
+                    cantidadVentas: 0,
+                    cantidadVendida: 0,
+                    unidadMedida: venta.unidadOriginal || 'galones'
+                  });
+                }
+
+                const productStats = productosPorMetodo.get(key)!;
+                productStats.montoTotal += mp.monto;
+                productStats.cantidadVentas += 1;
+                productStats.cantidadVendida += venta.cantidadVendidaGalones || venta.cantidadVendidaLitros || 0;
+
+                montoTotalPeriodo += mp.monto;
+                totalTransacciones += 1;
+              }
+            }
+          }
+        }
+      }
+
+      // Procesar datos de productos de tienda
+      if (datosCompletos?.datosProcesados?.resumenVentasProductos?.ventasDetalle) {
+        for (const producto of datosCompletos.datosProcesados.resumenVentasProductos.ventasDetalle) {
+          // Procesar ventas individuales si existen
+          if (producto.ventasIndividuales) {
+            for (const ventaInd of producto.ventasIndividuales) {
+              if (ventaInd.metodosPago) {
+                for (const mp of ventaInd.metodosPago) {
+                  // Filtros
+                  if (metodoPago && mp.metodoPago !== metodoPago) continue;
+                  if (codigoProducto && producto.codigoProducto !== codigoProducto) continue;
+
+                  // Acumular estadísticas por método de pago
+                  if (!metodosPagoStats.has(mp.metodoPago)) {
+                    metodosPagoStats.set(mp.metodoPago, {
+                      montoTotal: 0,
+                      cantidadTransacciones: 0,
+                      productosVendidos: new Set()
+                    });
+                  }
+
+                  const stats = metodosPagoStats.get(mp.metodoPago)!;
+                  stats.montoTotal += mp.monto;
+                  stats.cantidadTransacciones += 1;
+                  stats.productosVendidos.add(producto.codigoProducto);
+
+                  // Acumular por producto y método de pago
+                  const key = `${producto.codigoProducto}_${mp.metodoPago}`;
+                  if (!productosPorMetodo.has(key)) {
+                    productosPorMetodo.set(key, {
+                      codigoProducto: producto.codigoProducto,
+                      nombreProducto: producto.nombreProducto,
+                      metodoPago: mp.metodoPago,
+                      montoTotal: 0,
+                      cantidadVentas: 0,
+                      cantidadVendida: 0,
+                      unidadMedida: producto.unidadMedida
+                    });
+                  }
+
+                  const productStats = productosPorMetodo.get(key)!;
+                  productStats.montoTotal += mp.monto;
+                  productStats.cantidadVentas += 1;
+                  productStats.cantidadVendida += ventaInd.cantidad;
+
+                  montoTotalPeriodo += mp.monto;
+                  totalTransacciones += 1;
+                }
+              }
+            }
+          } else if (producto.metodosPago) {
+            // Procesar métodos de pago consolidados del producto
+            for (const mp of producto.metodosPago) {
+              // Filtros
+              if (metodoPago && mp.metodoPago !== metodoPago) continue;
+              if (codigoProducto && producto.codigoProducto !== codigoProducto) continue;
+
+              // Acumular estadísticas por método de pago
+              if (!metodosPagoStats.has(mp.metodoPago)) {
+                metodosPagoStats.set(mp.metodoPago, {
+                  montoTotal: 0,
+                  cantidadTransacciones: 0,
+                  productosVendidos: new Set()
+                });
+              }
+
+              const stats = metodosPagoStats.get(mp.metodoPago)!;
+              stats.montoTotal += mp.monto;
+              stats.cantidadTransacciones += 1;
+              stats.productosVendidos.add(producto.codigoProducto);
+
+              // Acumular por producto y método de pago
+              const key = `${producto.codigoProducto}_${mp.metodoPago}`;
+              if (!productosPorMetodo.has(key)) {
+                productosPorMetodo.set(key, {
+                  codigoProducto: producto.codigoProducto,
+                  nombreProducto: producto.nombreProducto,
+                  metodoPago: mp.metodoPago,
+                  montoTotal: 0,
+                  cantidadVentas: 0,
+                  cantidadVendida: 0,
+                  unidadMedida: producto.unidadMedida
+                });
+              }
+
+              const productStats = productosPorMetodo.get(key)!;
+              productStats.montoTotal += mp.monto;
+              productStats.cantidadVentas += 1;
+              productStats.cantidadVendida += producto.cantidadVendida;
+
+              montoTotalPeriodo += mp.monto;
+              totalTransacciones += 1;
+            }
+          }
+        }
+      }
+    }
+
+    // Convertir a arrays y calcular porcentajes
+    const resumenPorMetodoPago = Array.from(metodosPagoStats.entries()).map(([metodoPago, stats]) => ({
+      metodoPago,
+      montoTotal: Math.round(stats.montoTotal * 100) / 100,
+      cantidadTransacciones: stats.cantidadTransacciones,
+      porcentajeDelTotal: montoTotalPeriodo > 0 ? Math.round((stats.montoTotal / montoTotalPeriodo) * 100 * 100) / 100 : 0,
+      montoPromedioPorTransaccion: stats.cantidadTransacciones > 0 ? Math.round((stats.montoTotal / stats.cantidadTransacciones) * 100) / 100 : 0,
+      productosVendidos: Array.from(stats.productosVendidos) as string[],
+      cantidadProductosUnicos: stats.productosVendidos.size
+    })).sort((a, b) => b.montoTotal - a.montoTotal);
+
+    const detallesPorProducto = Array.from(productosPorMetodo.values()).map(producto => ({
+      codigoProducto: producto.codigoProducto,
+      nombreProducto: producto.nombreProducto,
+      metodoPago: producto.metodoPago,
+      montoTotal: Math.round(producto.montoTotal * 100) / 100,
+      cantidadVentas: producto.cantidadVentas,
+      cantidadVendida: Math.round(producto.cantidadVendida * 100) / 100,
+      unidadMedida: producto.unidadMedida
+    })).sort((a, b) => b.montoTotal - a.montoTotal);
+
+    return {
+      fechaDesde,
+      fechaHasta,
+      montoTotalPeriodo: Math.round(montoTotalPeriodo * 100) / 100,
+      totalTransacciones,
+      totalCierres: cierres.length,
+      resumenPorMetodoPago,
+      detallesPorProducto,
+      fechaGeneracion: new Date()
+    };
+  }
+
   private crearResumenFinancieroVacio(): any {
     return {
       totalDeclarado: 0,
@@ -1876,5 +2275,67 @@ export class ProductsResolver {
       totalOtros: Math.round(totalOtros * 100) / 100,
       observaciones: resumenVentas.observaciones
     };
+  }
+
+  /**
+   * PROCESAR ENTRADA DE INVENTARIO (MÉTODO ANTERIOR - MANTENIDO POR COMPATIBILIDAD)
+   * Registra ingresos de productos, combustibles y descargas de carrotanques
+   */
+  @Mutation(() => InventoryEntryResponse)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'manager', 'operator')
+  async processInventoryEntry(
+    @Args('inventoryEntryInput') inventoryEntryInput: InventoryEntryInput,
+    @CurrentUser() user: any,
+  ): Promise<InventoryEntryResponse> {
+    return this.inventoryService.processInventoryEntry(inventoryEntryInput);
+  }
+
+  /**
+   * PROCESAR ENTRADA DE INVENTARIO (NUEVA ESTRUCTURA NORMALIZADA)
+   * Registra procesos de entrada con movimientos separados
+   */
+  @Mutation(() => InventoryProcessResponse)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'manager', 'operator')
+  async processInventoryProcess(
+    @Args('inventoryProcessInput') inventoryProcessInput: InventoryProcessInput,
+    @CurrentUser() user: any,
+  ): Promise<InventoryProcessResponse> {
+    return this.productsService.processInventoryProcess(inventoryProcessInput, user);
+  }
+
+  /**
+   * OBTENER PROCESO DE INVENTARIO POR ID
+   */
+  @Query(() => InventoryProcessResult, { nullable: true })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'manager', 'operator', 'viewer')
+  async getInventoryProcess(
+    @Args('procesoId') procesoId: string,
+  ): Promise<InventoryProcessResult | null> {
+    return this.productsService.getInventoryProcess(procesoId);
+  }
+
+  /**
+   * LISTAR PROCESOS DE INVENTARIO
+   */
+  @Query(() => [InventoryProcessResult])
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'manager', 'operator', 'viewer')
+  async listInventoryProcesses(
+    @Args('puntoVentaId', { nullable: true }) puntoVentaId?: string,
+    @Args('estado', { nullable: true }) estado?: string,
+    @Args('tipoEntrada', { nullable: true }) tipoEntrada?: string,
+    @Args('fechaDesde', { nullable: true }) fechaDesde?: string,
+    @Args('fechaHasta', { nullable: true }) fechaHasta?: string,
+  ): Promise<InventoryProcessResult[]> {
+    return this.productsService.listInventoryProcesses({
+      puntoVentaId,
+      estado,
+      tipoEntrada,
+      fechaDesde,
+      fechaHasta,
+    });
   }
 } 
